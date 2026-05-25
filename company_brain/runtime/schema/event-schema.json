@@ -1,0 +1,117 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 \{\
+  "$schema": "http://json-schema.org/draft-07/schema#",\
+  "title": "BrainEvent",\
+  "description": "Standard event envelope for the Company Brain Runtime. All events that enter, flow through, or are emitted by the runtime use this schema.",\
+  "type": "object",\
+  "properties": \{\
+    "event_id": \{\
+      "type": "string",\
+      "format": "uuid",\
+      "description": "Unique identifier for this event."\
+    \},\
+    "correlation_id": \{\
+      "type": "string",\
+      "description": "Links events belonging to the same workflow instance or transaction. Same as workflow_instance_id when part of a workflow."\
+    \},\
+    "timestamp": \{\
+      "type": "string",\
+      "format": "date-time",\
+      "description": "ISO 8601 timestamp of when the event occurred."\
+    \},\
+    "source": \{\
+      "type": "string",\
+      "enum": ["slack", "zendesk", "github", "stripe", "hubspot", "human", "agent", "runtime", "maintainer", "system"],\
+      "description": "The origin of the event. Tool names are examples; the runtime maps the company's tools to these labels."\
+    \},\
+    "source_id": \{\
+      "type": "string",\
+      "description": "ID of the original resource in the source system (e.g., Slack message timestamp, ticket ID)."\
+    \},\
+    "brain_id": \{\
+      "type": "string",\
+      "description": "Identifier of the brain folder this event relates to."\
+    \},\
+    "workflow_instance_id": \{\
+      "type": "string",\
+      "description": "If the event is part of a workflow execution, the unique workflow instance ID."\
+    \},\
+    "event_type": \{\
+      "type": "string",\
+      "enum": [\
+        "new_ticket",\
+        "new_message",\
+        "action_started",\
+        "action_completed",\
+        "action_failed",\
+        "action_retry",\
+        "human_approval_requested",\
+        "human_approval_granted",\
+        "human_approval_denied",\
+        "human_correction",\
+        "explicit_update",\
+        "exception",\
+        "workflow_started",\
+        "workflow_completed",\
+        "workflow_failed",\
+        "workflow_compensated",\
+        "step_state_change",\
+        "health_check",\
+        "drift_alert",\
+        "maintainer_suggestion"\
+      ],\
+      "description": "Type of event. The runtime and maintainer use this to route and process."\
+    \},\
+    "payload": \{\
+      "type": "object",\
+      "description": "Event-specific data. Structure varies by event_type.",\
+      "oneOf": [\
+        \{\
+          "properties": \{\
+            "description": \{ "type": "string" \},\
+            "data": \{ "type": "object" \},\
+            "context": \{ "type": "object" \}\
+          \}\
+        \}\
+      ]\
+    \},\
+    "decision_context": \{\
+      "type": "object",\
+      "description": "Context that was used to make an AI decision, if applicable. Contains references to brain artifacts.",\
+      "properties": \{\
+        "rule_ids": \{\
+          "type": "array",\
+          "items": \{ "type": "string" \},\
+          "description": "IDs of decision rules from 03-decision-rules.md that influenced the action."\
+        \},\
+        "unwritten_rule_references": \{\
+          "type": "array",\
+          "items": \{ "type": "string" \},\
+          "description": "References to entries in 02-unwritten-rules.md."\
+        \},\
+        "guardrail_ids": \{\
+          "type": "array",\
+          "items": \{ "type": "string" \},\
+          "description": "Guardrails that were checked."\
+        \},\
+        "eval_case_ids": \{\
+          "type": "array",\
+          "items": \{ "type": "string" \},\
+          "description": "Eval cases that matched this scenario."\
+        \}\
+      \}\
+    \},\
+    "metadata": \{\
+      "type": "object",\
+      "description": "Additional key-value pairs for routing, filtering, or custom uses.",\
+      "additionalProperties": true\
+    \}\
+  \},\
+  "required": ["event_id", "timestamp", "source", "brain_id", "event_type", "payload"]\
+\}}

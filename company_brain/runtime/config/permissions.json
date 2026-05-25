@@ -1,0 +1,28 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 \{\
+  "roles": \{\
+    "billing_agent": \{\
+      "allowed_capabilities": ["get_ticket", "lookup_customer", "post_ticket_comment"],\
+      "max_auto_refund": 500,\
+      "requires_approval": [\
+        "refund_amount > 500",\
+        "customer_tier == 'enterprise'"\
+      ]\
+    \},\
+    "billing_manager": \{\
+      "allowed_capabilities": ["get_ticket", "lookup_customer", "post_ticket_comment", "process_refund"],\
+      "max_auto_refund": 5000,\
+      "requires_approval": ["refund_amount > 5000"]\
+    \}\
+  \},\
+  "agents": \{\
+    "agent-billing-01": \{ "role": "billing_agent" \},\
+    "agent-billing-approver": \{ "role": "billing_manager" \}\
+  \}\
+\}}

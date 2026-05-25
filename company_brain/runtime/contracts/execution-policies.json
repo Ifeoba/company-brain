@@ -1,0 +1,411 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 \{\
+  "policies": [\
+    \{\
+      "policy_id": "default-sequential",\
+      "type": "sequential",\
+      "description": "Execute all required capabilities in order, no retries, stop on first failure.",\
+      "retry": \{\
+        "max_attempts": 0\
+      \},\
+      "failure_handling": \{\
+        "on_step_failure": "stop",\
+        "global_strategy": "none"\
+      \},\
+      "compensation": \{\}\
+    \},\
+    \{\
+      "policy_id": "default-with-retry",\
+      "type": "sequential",\
+      "description": "Execute capabilities in order with simple retry on transient failures.",\
+      "retry": \{\
+        "max_attempts": 3,\
+        "backoff": "linear",\
+        "initial_delay_ms": 1000,\
+        "max_delay_ms": 10000\
+      \},\
+      "failure_handling": \{\
+        "on_step_failure": "retry_then_stop",\
+        "global_strategy": "escalate_to_human"\
+      \},\
+      "compensation": \{\}\
+    \},\
+    \{\
+      "policy_id": "billing-ticket-reply",\
+      "type": "graph",\
+      "description": "Full billing reply workflow with parallel drafts for enterprise vs standard, retries, and compensation on comment post failure.",\
+      "retry": \{\
+        "max_attempts": 3,\
+        "backoff": "exponential",\
+        "initial_delay_ms": 1000,\
+        "max_delay_ms": 30000\
+      \},\
+      "failure_handling": \{\
+        "on_step_failure": "compensate_and_stop",\
+        "global_strategy": "compensate_and_escalate",\
+        "escalation": \{\
+          "capability": "send_message",\
+          "target": "human_ops_channel",\
+          "message_template": "Workflow \{workflow_instance_id\} failed at step \{failed_step\}. Reason: \{error\}. Manual intervention required."\
+        \}\
+      \},\
+      "nodes": [\
+        \{\
+          "id": "fetch_ticket",\
+          "type": "action",\
+          "capability": "get_ticket",\
+          "input_map": \{\
+            "ticket_id": "$.input.ticket_id"\
+          \},\
+          "output_map": \{\
+            "ticket_id": "$.output.ticket_id",\
+            "customer_id": "$.output.customer_id",\
+            "subject": "$.output.subject",\
+            "body": "$.output.body",\
+            "status": "$.output.status"\
+          \},\
+          "retry_override": \{\
+            "max_attempts": 5,\
+            "backoff": "exponential"\
+          \},\
+          "on_failure": "retry_then_stop",\
+          "timeout_ms": 15000\
+        \},\
+        \{\
+          "id": "lookup_customer",\
+          "type": "action",\
+          "capability": "lookup_customer",\
+          "input_map": \{\
+            "customer_id": "$.fetch_ticket.customer_id"\
+          \},\
+          "output_map": \{\
+            "customer_tier": "$.output.tier",\
+            "billing_address": "$.output.billing_address",\
+            "account_status": "$.output.status"\
+          \},\
+          "retry_override": \{\
+            "max_attempts": 2,\
+            "backoff": "linear"\
+          \},\
+          "on_failure": "skip",\
+          "skip_output": \{\
+            "customer_tier": "standard"\
+          \},\
+          "timeout_ms": 10000\
+        \},\
+        \{\
+          "id": "classify_intent",\
+          "type": "action",\
+          "capability": "classify_intent",\
+          "input_map": \{\
+            "ticket_body": "$.fetch_ticket.body",\
+            "ticket_subject": "$.fetch_ticket.subject"\
+          \},\
+          "output_map": \{\
+            "intent": "$.output.intent",\
+            "sub_intent": "$.output.sub_intent",\
+            "confidence": "$.output.confidence"\
+          \},\
+          "retry_override": \{\
+            "max_attempts": 1\
+          \},\
+          "on_failure": "skip",\
+          "skip_output": \{\
+            "intent": "general_billing_inquiry",\
+            "confidence": 0.5\
+          \}\
+        \},\
+        \{\
+          "id": "draft_reply_enterprise",\
+          "type": "action",\
+          "capability": "generate_text",\
+          "condition": "$.lookup_customer.customer_tier == 'enterprise'",\
+          "input_map": \{\
+            "prompt_template": "enterprise_billing_reply",\
+            "ticket_subject": "$.fetch_ticket.subject",\
+            "ticket_body": "$.fetch_ticket.body",\
+            "intent": "$.classify_intent.intent",\
+            "customer_tier": "enterprise"\
+          \},\
+          "output_map": \{\
+            "reply_text": "$.output.text",\
+            "confidence": "$.output.confidence"\
+          \},\
+          "retry_override": \{\
+            "max_attempts": 2\
+          \},\
+          "on_failure": "stop",\
+          "timeout_ms": 30000\
+        \},\
+        \{\
+          "id": "draft_reply_standard",\
+          "type": "action",\
+          "capability": "generate_text",\
+          "condition": "$.lookup_customer.customer_tier != 'enterprise'",\
+          "input_map": \{\
+            "prompt_template": "standard_billing_reply",\
+            "ticket_subject": "$.fetch_ticket.subject",\
+            "ticket_body": "$.fetch_ticket.body",\
+            "intent": "$.classify_intent.intent",\
+            "customer_tier": "standard"\
+          \},\
+          "output_map": \{\
+            "reply_text": "$.output.text",\
+            "confidence": "$.output.confidence"\
+          \},\
+          "retry_override": \{\
+            "max_attempts": 2\
+          \},\
+          "on_failure": "stop",\
+          "timeout_ms": 30000\
+        \},\
+        \{\
+          "id": "post_comment",\
+          "type": "action",\
+          "capability": "post_ticket_comment",\
+          "input_map": \{\
+            "ticket_id": "$.fetch_ticket.ticket_id",\
+            "comment": "$.coalesce(draft_reply_enterprise.reply_text, draft_reply_standard.reply_text)"\
+          \},\
+          "output_map": \{\
+            "comment_id": "$.output.comment_id",\
+            "posted_at": "$.output.timestamp"\
+          \},\
+          "join": "any",\
+          "retry_override": \{\
+            "max_attempts": 3,\
+            "backoff": "linear",\
+            "initial_delay_ms": 2000\
+          \},\
+          "on_failure": "compensate_and_stop",\
+          "compensation": \{\
+            "id": "delete_comment",\
+            "capability": "delete_ticket_comment",\
+            "input_map": \{\
+              "ticket_id": "$.fetch_ticket.ticket_id",\
+              "comment_id": "$.post_comment.comment_id"\
+            \},\
+            "retry_override": \{\
+              "max_attempts": 2\
+            \}\
+          \},\
+          "timeout_ms": 20000\
+        \}\
+      ],\
+      "edges": [\
+        \{ "from": "fetch_ticket", "to": "lookup_customer" \},\
+        \{ "from": "fetch_ticket", "to": "classify_intent" \},\
+        \{ "from": "lookup_customer", "to": "draft_reply_enterprise" \},\
+        \{ "from": "lookup_customer", "to": "draft_reply_standard" \},\
+        \{ "from": "classify_intent", "to": "draft_reply_enterprise" \},\
+        \{ "from": "classify_intent", "to": "draft_reply_standard" \},\
+        \{ "from": "draft_reply_enterprise", "to": "post_comment" \},\
+        \{ "from": "draft_reply_standard", "to": "post_comment" \}\
+      ],\
+      "compensation_chain": \{\
+        "strategy": "reverse_order",\
+        "nodes": ["post_comment"],\
+        "on_compensation_failure": "escalate"\
+      \}\
+    \},\
+    \{\
+      "policy_id": "refund-processing",\
+      "type": "graph",\
+      "description": "Process a refund: verify order, check fraud, issue refund, notify customer. Multi-stage with compensation at each stage.",\
+      "retry": \{\
+        "max_attempts": 3,\
+        "backoff": "exponential",\
+        "initial_delay_ms": 500,\
+        "max_delay_ms": 15000\
+      \},\
+      "failure_handling": \{\
+        "on_step_failure": "compensate_and_stop",\
+        "global_strategy": "compensate_and_escalate",\
+        "escalation": \{\
+          "capability": "send_message",\
+          "target": "finance_ops_channel",\
+          "message_template": "Refund workflow \{workflow_instance_id\} for order \{order_id\} failed. Reason: \{error\}. Full compensation initiated."\
+        \}\
+      \},\
+      "nodes": [\
+        \{\
+          "id": "verify_order",\
+          "type": "action",\
+          "capability": "lookup_order",\
+          "input_map": \{ "order_id": "$.input.order_id" \},\
+          "output_map": \{\
+            "order_status": "$.output.status",\
+            "amount": "$.output.amount",\
+            "customer_id": "$.output.customer_id"\
+          \},\
+          "on_failure": "stop",\
+          "timeout_ms": 10000\
+        \},\
+        \{\
+          "id": "check_fraud",\
+          "type": "action",\
+          "capability": "fraud_check",\
+          "input_map": \{\
+            "order_id": "$.input.order_id",\
+            "customer_id": "$.verify_order.customer_id",\
+            "amount": "$.verify_order.amount"\
+          \},\
+          "output_map": \{\
+            "fraud_score": "$.output.score",\
+            "flags": "$.output.flags"\
+          \},\
+          "condition": "$.verify_order.order_status == 'completed'",\
+          "on_failure": "stop",\
+          "timeout_ms": 15000\
+        \},\
+        \{\
+          "id": "approval_gate",\
+          "type": "decision",\
+          "condition": "$.check_fraud.fraud_score > 0.7 || $.verify_order.amount > 500",\
+          "branches": \{\
+            "true": [\
+              \{\
+                "id": "request_approval",\
+                "type": "action",\
+                "capability": "request_human_approval",\
+                "input_map": \{\
+                  "approval_type": "refund",\
+                  "order_id": "$.input.order_id",\
+                  "amount": "$.verify_order.amount",\
+                  "fraud_score": "$.check_fraud.fraud_score",\
+                  "reason": "$.input.reason"\
+                \},\
+                "output_map": \{\
+                  "approved": "$.output.approved",\
+                  "approver_id": "$.output.approver_id"\
+                \},\
+                "on_failure": "stop",\
+                "timeout_ms": 3600000\
+              \}\
+            ],\
+            "false": [\
+              \{\
+                "id": "auto_approved",\
+                "type": "action",\
+                "capability": "noop",\
+                "output_map": \{\
+                  "approved": true,\
+                  "approver_id": "system_auto"\
+                \}\
+              \}\
+            ]\
+          \}\
+        \},\
+        \{\
+          "id": "issue_refund",\
+          "type": "action",\
+          "capability": "process_refund",\
+          "condition": "$.coalesce(request_approval.approved, auto_approved.approved) == true",\
+          "input_map": \{\
+            "order_id": "$.input.order_id",\
+            "amount": "$.verify_order.amount",\
+            "reason": "$.input.reason"\
+          \},\
+          "output_map": \{\
+            "refund_id": "$.output.refund_id",\
+            "status": "$.output.status"\
+          \},\
+          "join": "any",\
+          "retry_override": \{\
+            "max_attempts": 3,\
+            "backoff": "exponential"\
+          \},\
+          "on_failure": "compensate_and_stop",\
+          "compensation": \{\
+            "id": "reverse_refund",\
+            "capability": "reverse_refund",\
+            "input_map": \{\
+              "refund_id": "$.issue_refund.refund_id"\
+            \}\
+          \},\
+          "timeout_ms": 30000\
+        \},\
+        \{\
+          "id": "notify_customer",\
+          "type": "action",\
+          "capability": "send_message",\
+          "condition": "$.issue_refund.status == 'completed'",\
+          "input_map": \{\
+            "customer_id": "$.verify_order.customer_id",\
+            "template": "refund_confirmation",\
+            "refund_id": "$.issue_refund.refund_id",\
+            "amount": "$.verify_order.amount"\
+          \},\
+          "on_failure": "skip",\
+          "timeout_ms": 10000\
+        \}\
+      ],\
+      "edges": [\
+        \{ "from": "verify_order", "to": "check_fraud" \},\
+        \{ "from": "check_fraud", "to": "approval_gate" \},\
+        \{ "from": "approval_gate", "to": "issue_refund" \},\
+        \{ "from": "issue_refund", "to": "notify_customer" \}\
+      ],\
+      "compensation_chain": \{\
+        "strategy": "reverse_order",\
+        "nodes": ["issue_refund", "notify_customer"],\
+        "on_compensation_failure": "escalate"\
+      \}\
+    \}\
+  ],\
+  "retry_strategies": \{\
+    "linear": \{\
+      "description": "Fixed delay between retries",\
+      "delay_formula": "initial_delay_ms * attempt_number"\
+    \},\
+    "exponential": \{\
+      "description": "Exponential backoff with jitter",\
+      "delay_formula": "min(initial_delay_ms * 2^(attempt_number-1), max_delay_ms) * random(0.5, 1.5)"\
+    \},\
+    "fixed": \{\
+      "description": "Same delay every retry",\
+      "delay_formula": "initial_delay_ms"\
+    \}\
+  \},\
+  "failure_actions": \{\
+    "stop": "Halt the workflow immediately, no compensation.",\
+    "skip": "Skip this step and continue with a default/null output.",\
+    "retry_then_stop": "Retry according to policy; if all attempts fail, stop the workflow.",\
+    "retry_then_skip": "Retry; if all fail, skip with default output and continue.",\
+    "compensate_and_stop": "Run this step's compensation, then stop the workflow.",\
+    "compensate_and_continue": "Run compensation, then continue with remaining steps.",\
+    "escalate": "Stop workflow and send an escalation message to the designated channel."\
+  \},\
+  "state_engine": \{\
+    "persistence": \{\
+      "type": "json_file",\
+      "path_template": "\{brain_folder\}/runtime/state/\{workflow_instance_id\}.json"\
+    \},\
+    "checkpoint_strategy": "after_each_step",\
+    "resume_on_startup": true,\
+    "max_retained_instances": 1000,\
+    "completed_instance_ttl_days": 90,\
+    "failed_instance_ttl_days": 180\
+  \},\
+  "global_defaults": \{\
+    "timeout_ms": 60000,\
+    "retry": \{\
+      "max_attempts": 3,\
+      "backoff": "linear",\
+      "initial_delay_ms": 1000,\
+      "max_delay_ms": 30000\
+    \},\
+    "on_step_failure": "retry_then_stop",\
+    "global_strategy": "escalate_to_human",\
+    "escalation": \{\
+      "capability": "send_message",\
+      "target": "ops_channel"\
+    \}\
+  \}\
+\}}
