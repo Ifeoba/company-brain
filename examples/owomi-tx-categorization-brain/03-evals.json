@@ -1,0 +1,288 @@
+{
+  "$schema": "../../spec/schemas/evals.schema.json",
+  "service": "When CategoryEngine returns null or confidence ≤ 0.5 for a transaction, determine the correct subcategory from Owomi's 3-tier taxonomy — auto-committing when user history supports it, or surfacing a Quick Tag card otherwise.",
+  "version": "1.0",
+  "evals": [
+    {
+      "id": "EVAL-001",
+      "description": "Routine debit with matching user rule — should auto-assign without Quick Tag",
+      "difficulty": "routine",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_001",
+        "narration": "POS PURCHASE SHOPRITE LAGOSNG",
+        "amount": -12500,
+        "user_id": "user_001",
+        "category_rules": [
+          { "narration_pattern": "SHOPRITE", "subcategory_key": "groceries" }
+        ],
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "auto_assign",
+        "action": "Write groceries to transactions.subcategory_key; set confidence = 0.9; set source = user_rule",
+        "escalate": false,
+        "quick_tag_queued": false,
+        "notes": "category_rules match fires in Rule 1 — engine result is discarded. This is the most common path."
+      }
+    },
+    {
+      "id": "EVAL-002",
+      "description": "Engine returned null, no user rule, narration is a bank transfer — should queue Quick Tag, not assign spending category",
+      "difficulty": "routine",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_002",
+        "narration": "NIP TO ZENITH BANK JOHN DOE",
+        "amount": -50000,
+        "user_id": "user_002",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "queue_quick_tag",
+        "action": "Queue Quick Tag card with suggested_subcategory = own_account_transfer",
+        "escalate": false,
+        "quick_tag_queued": true,
+        "notes": "Rule 2 fires on NIP TO. Never auto-assign a spending subcategory to a transfer narration."
+      }
+    },
+    {
+      "id": "EVAL-003",
+      "description": "Salary credit — should auto-assign to salary_income",
+      "difficulty": "routine",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_003",
+        "narration": "SALARY PAYMENT APRIL 2026 ACME LTD",
+        "amount": 450000,
+        "user_id": "user_003",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "auto_assign",
+        "action": "Write salary_income to transactions.subcategory_key; set confidence = 0.85; set source = payroll_pattern",
+        "escalate": false,
+        "quick_tag_queued": false,
+        "notes": "Rule 3 fires: SALARY keyword, positive amount. Straight to auto-commit."
+      }
+    },
+    {
+      "id": "EVAL-004",
+      "description": "Engine returned confidence 0.5 — the gap case — should NOT silently commit, should queue Quick Tag",
+      "difficulty": "routine",
+      "source": "Codebase analysis, 2026-05 — this is the primary bug this brain fixes",
+      "input": {
+        "transaction_id": "txn_004",
+        "narration": "WEB PURCHASE 00123456",
+        "amount": -3200,
+        "user_id": "user_004",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": "online_shopping", "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "queue_quick_tag",
+        "action": "Queue Quick Tag card with suggested_subcategory = online_shopping (as suggestion only, not committed)",
+        "escalate": false,
+        "quick_tag_queued": true,
+        "notes": "This is the exact bug the brain fixes. Currently the 0.5 confidence guess is saved silently. Brain must queue Quick Tag instead. Engine suggestion is pre-populated on the card as a starting point."
+      }
+    },
+    {
+      "id": "EVAL-005",
+      "description": "Airtime purchase from MTN — should auto-assign to airtime_and_data",
+      "difficulty": "routine",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_005",
+        "narration": "AIRTIME TOP UP MTN 08012345678",
+        "amount": -1000,
+        "user_id": "user_005",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "auto_assign",
+        "action": "Write airtime_and_data to transactions.subcategory_key; set confidence = 0.85; set source = agent_rule",
+        "escalate": false,
+        "quick_tag_queued": false,
+        "notes": "Rule 5 fires: AIRTIME + MTN. This is a high-frequency transaction type for Nigerian users — important to get right."
+      }
+    },
+    {
+      "id": "EVAL-006",
+      "description": "Remita transaction — should auto-assign to government_payment, not generic services",
+      "difficulty": "routine",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_006",
+        "narration": "REMITA PAYMENT LAGOS STATE REVENUE",
+        "amount": -25000,
+        "user_id": "user_006",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": "services", "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "auto_assign",
+        "action": "Write government_payment to transactions.subcategory_key; set confidence = 0.75; set source = agent_rule",
+        "escalate": false,
+        "quick_tag_queued": false,
+        "notes": "Rule 4 fires on REMITA. Engine's 'services' guess is discarded — Remita means government/institutional payment."
+      }
+    },
+    {
+      "id": "EVAL-007",
+      "description": "Edge: Salary advance REPAYMENT — negative amount with salary keyword — should NOT auto-assign as income",
+      "difficulty": "edge",
+      "source": "Ifeoluwa Obadiah interview, 2026-05 — real case from early Owomi testing",
+      "input": {
+        "transaction_id": "txn_007",
+        "narration": "SALARY ADVANCE REPAYMENT REF 20260415",
+        "amount": -45000,
+        "user_id": "user_007",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "queue_quick_tag",
+        "action": "Queue Quick Tag card with no pre-populated subcategory",
+        "escalate": false,
+        "quick_tag_queued": true,
+        "notes": "Rule 3 ELSE branch: SALARY keyword present but amount is NEGATIVE. This is a repayment, not income. Auto-assigning salary_income here would be wrong and corrupt the user's income tracking."
+      }
+    },
+    {
+      "id": "EVAL-008",
+      "description": "Edge: Amazon transaction — amount determines subcategory, not just vendor name",
+      "difficulty": "edge",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_008",
+        "narration": "AMAZON WEB SERVICES",
+        "amount": -650,
+        "user_id": "user_008",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": "online_shopping", "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "queue_quick_tag",
+        "action": "Queue Quick Tag card with suggested_subcategory = entertainment (Prime/Kindle) based on amount < ₦3,000",
+        "escalate": false,
+        "quick_tag_queued": true,
+        "notes": "Edge case 2 from decision rules. ₦650 is too small to be a purchase — likely Prime Video or Kindle. Engine's 'online_shopping' guess is presented as option but not pre-committed."
+      }
+    },
+    {
+      "id": "EVAL-009",
+      "description": "Edge: Empty narration — should queue Quick Tag with no suggestion, not error",
+      "difficulty": "edge",
+      "source": "Codebase analysis, 2026-05 — blank narrations from certain bank feeds",
+      "input": {
+        "transaction_id": "txn_009",
+        "narration": "",
+        "amount": -8500,
+        "user_id": "user_009",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "queue_quick_tag",
+        "action": "Queue Quick Tag card with no pre-populated subcategory and label: 'Unknown transaction — please identify.'",
+        "escalate": false,
+        "quick_tag_queued": true,
+        "notes": "Unwritten rule 6: empty narration is a data quality problem, not an error. Guard all pattern checks against len(narration) == 0 to prevent false matches."
+      }
+    },
+    {
+      "id": "EVAL-010",
+      "description": "Edge: Quick Tag queue is full (7+ items) — should backlog the transaction, not add another card",
+      "difficulty": "edge",
+      "source": "Ifeoluwa Obadiah interview, 2026-05 — product observation",
+      "input": {
+        "transaction_id": "txn_010",
+        "narration": "POS PURCHASE UNKNOWN VENDOR",
+        "amount": -4200,
+        "user_id": "user_010",
+        "category_rules": [],
+        "quick_tag_queue_size": 8,
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "backlog",
+        "action": "Set transactions.categorization_source = 'backlogged'; do NOT queue Quick Tag card",
+        "escalate": false,
+        "quick_tag_queued": false,
+        "notes": "Unwritten rule 3: queue above 7 causes user abandonment. Backlog the transaction and retry when queue drains below 5. This case tests whether the agent knows to check queue size before adding."
+      }
+    },
+    {
+      "id": "EVAL-011",
+      "description": "Hard: User rule exists for narration pattern, but amount is 10× the typical amount — anomaly should surface to user",
+      "difficulty": "hard",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_011",
+        "narration": "POS PURCHASE SHOPRITE LAGOSNG",
+        "amount": -420000,
+        "user_id": "user_011",
+        "category_rules": [
+          { "narration_pattern": "SHOPRITE", "subcategory_key": "groceries" }
+        ],
+        "median_amount_for_pattern": 18000,
+        "engine_result": { "subcategoryKey": "groceries", "confidence": 0.9 }
+      },
+      "expected_output": {
+        "decision": "queue_quick_tag",
+        "action": "Queue Quick Tag card with suggested_subcategory = groceries and anomaly note: 'This looks larger than usual — is it still Groceries?'",
+        "escalate": false,
+        "quick_tag_queued": true,
+        "notes": "The naive answer is to auto-assign via Rule 1 (user rule exists). The correct answer is to flag the anomaly — ₦420,000 at Shoprite is 23× the user's typical grocery spend. Edge case 4 from decision rules. A smart new hire would just apply the user rule and miss the anomaly."
+      }
+    },
+    {
+      "id": "EVAL-012",
+      "description": "Hard: Positive amount with no income marker — unclassified credit — should queue Quick Tag, not auto-assign to income",
+      "difficulty": "hard",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_012",
+        "narration": "CREDIT ALERT REF/202605150001",
+        "amount": 85000,
+        "user_id": "user_012",
+        "category_rules": [],
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "queue_quick_tag",
+        "action": "Queue Quick Tag card with no pre-populated subcategory and note: 'We couldn't identify this credit — is it income, a refund, or something else?'",
+        "escalate": false,
+        "quick_tag_queued": true,
+        "notes": "Rule 7: positive amount, no income marker. Wrong answer: auto-assign to other_income or leave with CategoryEngine's null result. Credits must be confirmed by the user — an auto-assigned income category corrupts the user's income reports if it's actually a refund or a family transfer."
+      }
+    },
+    {
+      "id": "EVAL-013",
+      "description": "Hard: Transfer narration but user has a category_rule for it — user rule should NOT override the transfer guard",
+      "difficulty": "hard",
+      "source": "Ifeoluwa Obadiah interview, 2026-05",
+      "input": {
+        "transaction_id": "txn_013",
+        "narration": "NIP TO GTB SAVINGS SELF TRANSFER",
+        "amount": -200000,
+        "user_id": "user_013",
+        "category_rules": [
+          { "narration_pattern": "NIP TO GTB", "subcategory_key": "investment" }
+        ],
+        "engine_result": { "subcategoryKey": null, "confidence": 0.5 }
+      },
+      "expected_output": {
+        "decision": "queue_quick_tag",
+        "action": "Queue Quick Tag card with suggested_subcategory = own_account_transfer (ignore category_rules match for transfer narrations)",
+        "escalate": false,
+        "quick_tag_queued": true,
+        "notes": "This is the hardest case. Rule 1 (user rule) fires but Rule 2 (transfer guard) should override it. Why? The user previously tagged this as 'investment' but it's a NIP transfer — they may have mislabeled it historically. The transfer guard exists specifically to prevent corrupted categorizations from propagating. Surface to user for re-confirmation rather than perpetuating a possible error. Wrong answer: auto-assign to investment because the user rule exists."
+      }
+    }
+  ]
+}
