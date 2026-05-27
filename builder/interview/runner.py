@@ -73,6 +73,7 @@ class InterviewRunner:
                 continue
             if self._is_done(step):
                 self._print(f"  ✓ Step {step.number} ({step.name}) — already complete, skipping")
+                self._preview_step(step)
                 completed += 1
                 continue
             wrote = self._run_step(step)
@@ -96,9 +97,38 @@ class InterviewRunner:
         self._company_name = self._input("> ").strip()
         self._print("")
 
-        self._print("Q: In one sentence, what does this agent do?\n")
+        self._print(
+            "Q: What does this agent do? Be specific: what triggers it, what does it\n"
+            "   read or check, what decision does it make, and what does it output or act on?\n"
+            "   e.g. \"When a transaction has null confidence, the agent checks user rules,\n"
+            "   applies decision logic, and either auto-assigns a category or queues it for review.\"\n"
+        )
         self._service_description = self._input("> ").strip()
         self._print("")
+
+    def _preview_step(self, step: Step) -> None:
+        """Print the first two meaningful content lines from the step's primary file."""
+        primary = (step.files + step.json_files)[0]
+        path = self.brain_dir / primary
+        if not path.exists():
+            return
+        lines = []
+        in_html_comment = False
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            stripped = raw.strip()
+            if "<!--" in stripped:
+                in_html_comment = True
+            if in_html_comment:
+                if "-->" in stripped:
+                    in_html_comment = False
+                continue
+            if not stripped or stripped.startswith("#"):
+                continue
+            lines.append(stripped[:80] + ("…" if len(stripped) > 80 else ""))
+            if len(lines) == 2:
+                break
+        for line in lines:
+            self._print(f"      {line}")
 
     # ------------------------------------------------------------------
     # Step execution

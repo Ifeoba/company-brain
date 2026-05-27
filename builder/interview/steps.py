@@ -124,6 +124,15 @@ STEPS: list[Step] = [
                      "Be specific — name the data types and where they come from.",
             ),
             Question(
+                key="integrations",
+                text="What external systems does the agent need to connect to?\n"
+                     "For each: does it read from it, write to it, or both — and via what method?\n"
+                     "(e.g. Slack — sends escalation messages via webhook;\n"
+                     " Postgres — reads transactions table, writes category_assignments;\n"
+                     " Gmail — sends confirmation emails via SMTP;\n"
+                     " Microsoft Teams — posts approval requests to a channel)",
+            ),
+            Question(
                 key="approval_required",
                 text="Which of these actions require a human to approve before the agent can proceed?\n"
                      "For those: who approves, in what format, and what does approval look like?",
