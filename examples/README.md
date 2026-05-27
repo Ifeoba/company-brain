@@ -14,14 +14,32 @@ Example brains serve two purposes:
 - The evals include hard cases with non-obvious correct answers
 - At least one proof log entry exists, with a named human sign-off
 
-## Coming
+## Example brains
 
-The first example brain will cover a real operational service. Candidates:
-- Monthly per-staff KPI compilation (HR → line managers)
-- Inbound billing support email drafting
-- Freelance invoice reconciliation
+### owomi-tx-categorization-brain
 
-See the issue tracker for progress.
+**Service:** When Owomi's CategoryEngine returns null or confidence ≤ 0.5 for a transaction, determine the correct subcategory from the 3-tier taxonomy — auto-committing when user history supports it, or surfacing a Quick Tag card otherwise.
+
+**Domain:** Owomi — personal finance app for Nigerian users  
+**What makes it a good example:** Built around a real production gap (0.5-confidence guesses silently committed without user review). Covers Nigerian bank feed patterns (NIP transfers, Remita, airtime top-ups, salary credits) that a generic classifier would get wrong. Includes 13 eval cases — 6 routine, 4 edge, 3 hard — including the transfer-guard-vs-user-rule conflict (EVAL-013) which is the kind of non-obvious case that breaks naive implementations.
+
+| File | Status |
+|---|---|
+| `brain-readme.md` | ✅ Complete |
+| `01-service-definition.md` | ✅ Complete |
+| `02-how-work-happens.md` | ✅ Complete |
+| `02-unwritten-rules.md` | ✅ Complete |
+| `03-decision-rules.md` | ✅ Complete |
+| `03-evals.json` | ✅ Complete — 13 cases |
+| `04-skills.md` | ✅ Complete — 6 skills |
+| `05-guardrails.md` | ✅ Complete — 9 hard constraints |
+| `06-proof-log.md` | ⚠️ Placeholder — needs real agent runs |
+
+**Validator status:** Brain in formation. Proof log entries needed before "Brain ready."
+
+---
+
+## Contributing an example
 
 ## Contributing an example
 
