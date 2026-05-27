@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 runtime-events.jsonl
 .DS_Store
+*.egg-info/

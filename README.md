@@ -46,31 +46,44 @@ The spec and examples are independent of the runtime. You can clone this repo, c
 git clone https://github.com/Ifeoba/company-brain.git
 cd company-brain
 python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 2. Scaffold a new brain
 
-Copy the templates into a new folder:
-
 ```bash
-cp -r spec/templates/ brains/my-service-brain/
+companybrain init billing-support
+# ✓ Created brains/billing-support-brain/
+#   Next: open brains/billing-support-brain/01-service-definition.md and fill it in.
+#   Then: companybrain validate billing-support
 ```
 
-Then open each file and fill it in. The templates have instructions inside them. Work through the files in order — 01 through 06.
+Open each file and fill it in. The templates have instructions inside. Work through them in order — 01 through 06.
 
-### 3. Validate your brain
+### 3. Check your progress
 
-Check your brain against the six-dimension readiness rubric using the company-brain-validator (run in Claude with the validator skill loaded):
+```bash
+companybrain list
+# NAME                           STATUS          FILES    PLACEHOLDERS
+# billing-support                in formation    9/9      12
+```
 
-- Service Definition
-- Knowledge Layer
-- Judgment Layer
-- Skills
-- Guardrails
-- Proof
+### 4. Validate structure
 
-A brain is ready when all six dimensions score Solid.
+```bash
+companybrain validate billing-support
+# brains/billing-support-brain/
+#   ✓ 01-service-definition.md   present
+#   ✗ 01-service-definition.md   contains "REPLACE WITH" (3 occurrences)
+#   ...
+#   Status: not ready (3 issues)
+```
+
+Exit code 0 when ready, 1 when issues remain — plug into CI.
+
+### 5. Validate content (in Claude)
+
+Load the `company-brain-validator` skill and run it against your brain folder for a full six-dimension readiness report: service definition, knowledge layer, judgment layer, skills, guardrails, and proof.
 
 ---
 

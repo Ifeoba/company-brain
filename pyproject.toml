@@ -1,9 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "company-brain"
 version = "0.1.0"
 description = "Operational intelligence runtime for AI-native companies"
 readme = "README.md"
 requires-python = ">=3.10"
+
+[project.scripts]
+companybrain = "builder.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["builder*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
