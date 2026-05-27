@@ -13,6 +13,7 @@
 git clone https://github.com/Ifeoba/company-brain.git
 cd company-brain
 python3 -m venv venv && source venv/bin/activate
+pip install --upgrade pip
 pip install -e .
 ```
 
