@@ -1,0 +1,201 @@
+from __future__ import annotations
+from datetime import datetime
+from typing import Any
+from pydantic import BaseModel, field_validator
+import re
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+class UserOut(BaseModel):
+    id: str
+    github_username: str
+    email: str
+    avatar_url: str
+    has_anthropic_key: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class SetApiKeyRequest(BaseModel):
+    api_key: str
+
+
+# ── Brains ────────────────────────────────────────────────────────────────────
+
+class BrainCreate(BaseModel):
+    name: str
+    slug: str | None = None
+
+    @field_validator("slug", mode="before")
+    @classmethod
+    def auto_slug(cls, v, info):
+        if v:
+            return v.lower().strip()
+        name = info.data.get("name", "")
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+        return slug or "my-brain"
+
+
+class BrainSummary(BaseModel):
+    id: str
+    slug: str
+    name: str
+    readiness_score: int
+    updated_at: datetime
+    status: str  # in-formation | ready | stale
+
+    class Config:
+        from_attributes = True
+
+
+class BrainDetail(BrainSummary):
+    created_at: datetime
+    owner_id: str
+
+
+# ── Files ─────────────────────────────────────────────────────────────────────
+
+class FileSummary(BaseModel):
+    filename: str
+    has_content: bool
+    placeholder_count: int
+    updated_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class FileContent(BaseModel):
+    filename: str
+    content: str
+    updated_at: datetime | None
+
+
+class FileUpdate(BaseModel):
+    content: str
+
+
+# ── Readiness ─────────────────────────────────────────────────────────────────
+
+class FileDimension(BaseModel):
+    filename: str
+    exists: bool
+    placeholder_count: int
+    note: str
+
+
+class ReadinessOut(BaseModel):
+    score: int
+    files: list[FileDimension]
+
+
+# ── Interview ─────────────────────────────────────────────────────────────────
+
+class QuestionOut(BaseModel):
+    key: str
+    text: str
+
+
+class StepOut(BaseModel):
+    number: int
+    name: str
+    files: list[str]
+    json_files: list[str]
+    questions: list[QuestionOut]
+
+
+class InterviewStateOut(BaseModel):
+    current_step: int
+    current_question_index: int
+    answers: dict[str, dict[str, str]]
+    steps: list[StepOut]
+
+
+class InterviewProgress(BaseModel):
+    current_step: int
+    current_question_index: int
+
+
+class AnswerRequest(BaseModel):
+    step: int
+    question_key: str
+    answer_text: str
+
+
+class GenerateRequest(BaseModel):
+    step: int
+    filename: str
+
+
+class GenerateResponse(BaseModel):
+    content: str
+
+
+# ── Collaborators ─────────────────────────────────────────────────────────────
+
+class CollaboratorCreate(BaseModel):
+    name: str
+    email: str
+
+
+class CollaboratorOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    initials: str
+    color_seed: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Expert questions ──────────────────────────────────────────────────────────
+
+class AskExpertRequest(BaseModel):
+    collaborator_id: str
+    step: int
+    question_key: str
+    question_text: str
+    context_text: str = ""
+
+
+class ExpertQuestionOut(BaseModel):
+    id: str
+    token: str
+    collaborator_id: str
+    collaborator_name: str
+    step_number: int
+    question_key: str
+    question_text: str
+    context_text: str
+    status: str
+    created_at: datetime
+    expires_at: datetime
+    answer_text: str | None
+
+    class Config:
+        from_attributes = True
+
+
+class PublicQuestionOut(BaseModel):
+    brain_name: str
+    asker_name: str
+    recipient_name: str
+    question_text: str
+    context_text: str
+    already_answered: bool
+    existing_answer: str | None
+
+
+class ExpertAnswerRequest(BaseModel):
+    answer_text: str
+
+
+# ── CSRF ──────────────────────────────────────────────────────────────────────
+
+class CSRFToken(BaseModel):
+    csrf_token: str
