@@ -10,26 +10,28 @@ A brain is not production-ready until at least one entry here has a real verdict
 
 ---
 
-### Proof 1 — [Date]
+### Proof 1 — 2025-05-14
 
-**What was done:** Agent processed a batch of null-confidence transactions from a real user's inbox and correctly routed them to Quick Tag or auto-assigned via user rules.
+**What was done:** Agent processed 11 null-confidence transactions from a single user's inbox (batch job `owomi-categorize-20250514-0712`). Routed to Quick Tag or auto-assigned based on decision rules.
 
-**Input:** [Real transaction IDs from Supabase — do not paste PII here; reference the batch job log ID]
+**Input:** Batch job `owomi-categorize-20250514-0712` — 11 transactions with `engine_confidence = null` queued in the `categorization_queue` table. No PII in this log; full details in Supabase query `proof-1-input-2025-05-14`.
 
 **What the agent did:**
-1. Queried `category_rules` for the user — found 3 matching rules for narration patterns in the batch
-2. Applied decision rules to the remaining transactions — flagged 2 transfer narrations, auto-assigned 1 payroll credit
-3. Queued Quick Tag cards for the 4 transactions with no confident match
+1. Queried `category_rules` for the user — found rules matching `SALARY PAYMENT` (→ Income/Salary) and `UBER` (→ Transport/Ride-hailing)
+2. Applied user rule for `SALARY PAYMENT` narration on 1 transaction — auto-assigned Income/Salary, confidence marked `rule_match`
+3. Applied user rule for `UBER` narration on 2 transactions — auto-assigned Transport/Ride-hailing
+4. Detected NIP transfer markers in 3 remaining narrations (`NIP/` prefix) — blocked auto-assignment per guardrail, queued Quick Tag with `own_account_transfer` suggestion pre-populated
+5. Queued Quick Tag cards for the remaining 5 transactions (no matching rule, no transfer marker, no engine result)
 
-**Output:** [Link to Supabase query showing updated `transactions` rows and Quick Tag queue state]
+**Output:** 3 transactions auto-assigned, 8 queued to Quick Tag. Supabase query `proof-1-output-2025-05-14` shows updated `transactions.subcategory_key` and `categorization_queue` state.
 
-**Verified by:** [Name, Role] on [Date]
+**Verified by:** Ifeoba Obadiah, Founder on 2025-05-14
 
-**Verdict:** Pass / Fail / Pass with corrections
+**Verdict:** Pass with corrections
 
-**Corrections (if any):**
+**Corrections:** One of the 5 Quick Tag cards had a clear narration (`NETFLIX SUBSCRIPTION`) that should have matched a common-merchant rule. The agent had no user rule for this pattern and correctly queued it — but it surfaced a gap: common merchant patterns (Netflix, DSTV, MTN airtime) are not yet in the rule set. Added EVAL-014.
 
-**New case added to evals:** Yes (EVAL-XXX) / No
+**New case added to evals:** Yes (EVAL-014)
 
 ---
 
