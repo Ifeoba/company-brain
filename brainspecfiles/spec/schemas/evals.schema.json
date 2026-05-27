@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Brain Evals",
+  "description": "Test cases with known correct outcomes for validating agent decisions. See spec/BRAIN_SPEC.md §03-evals.json for requirements.",
+  "type": "object",
+  "required": ["service", "version", "evals"],
+  "additionalProperties": false,
+  "properties": {
+    "service": {
+      "type": "string",
+      "description": "The service this eval set covers. Must match the service definition in 01-service-definition.md."
+    },
+    "version": {
+      "type": "string",
+      "description": "Eval set version. Increment when cases change. Format: semver or date string (e.g. '1.0', '2025-05')."
+    },
+    "evals": {
+      "type": "array",
+      "minItems": 10,
+      "description": "Test cases. Minimum 10, with at least 3 rated 'hard'.",
+      "items": {
+        "type": "object",
+        "required": ["id", "description", "difficulty", "input", "expected_output"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier for this case. Format: EVAL-001, EVAL-002, etc."
+          },
+          "description": {
+            "type": "string",
+            "description": "One sentence describing what this case tests."
+          },
+          "difficulty": {
+            "type": "string",
+            "enum": ["routine", "edge", "hard"],
+            "description": "routine: the obvious case. edge: unusual but has a clear rule. hard: non-obvious; a smart new hire would likely get it wrong."
+          },
+          "source": {
+            "type": "string",
+            "description": "Where this case came from. Examples: 'historical ticket #1234', 'Priya interview 2025-04', 'maintenance log 2025-03-12'."
+          },
+          "input": {
+            "type": "object",
+            "description": "The input the agent receives. Shape must match the relevant skill's input contract in 04-skills.md."
+          },
+          "expected_output": {
+            "type": "object",
+            "description": "The correct output. Must be verifiable — not 'agent handles it well' but a specific, checkable result.",
+            "required": ["decision"],
+            "properties": {
+              "decision": {
+                "type": "string",
+                "description": "What the agent should decide or do."
+              },
+              "action": {
+                "type": "string",
+                "description": "The specific action the agent should take, if applicable."
+              },
+              "escalate": {
+                "type": "boolean",
+                "description": "Whether the agent should escalate to a human."
+              },
+              "escalation_reason": {
+                "type": "string",
+                "description": "Why it escalates, if escalate is true."
+              },
+              "notes": {
+                "type": "string",
+                "description": "Anything a reviewer needs to know when checking the agent's output against this case."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

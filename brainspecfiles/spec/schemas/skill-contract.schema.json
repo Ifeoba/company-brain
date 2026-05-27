@@ -1,0 +1,108 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Skill Contract",
+  "description": "Machine-readable contracts for the skills in 04-skills.md. The runtime uses these to validate inputs and route to the correct capability. See spec/BRAIN_SPEC.md §04-skills.md for requirements.",
+  "type": "object",
+  "required": ["service", "version", "contracts"],
+  "additionalProperties": false,
+  "properties": {
+    "service": {
+      "type": "string",
+      "description": "The service this contract set covers. Must match 01-service-definition.md."
+    },
+    "version": {
+      "type": "string",
+      "description": "Contract version. Increment when any skill contract changes."
+    },
+    "contracts": {
+      "type": "array",
+      "description": "One entry per skill. Each skill must correspond to a named skill in 04-skills.md.",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "trigger", "inputs", "outputs", "capabilities", "approval_required"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Skill name in snake_case. Must match the skill name in 04-skills.md exactly."
+          },
+          "description": {
+            "type": "string",
+            "description": "One sentence. What the skill does, from the perspective of the workflow."
+          },
+          "trigger": {
+            "type": "string",
+            "description": "What causes this skill to be invoked. Can be an event name, a step in the workflow, or a condition."
+          },
+          "inputs": {
+            "type": "object",
+            "description": "Input parameters. Each key is a parameter name; each value describes it.",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["type", "description", "required"],
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "Data type. Examples: string, integer, boolean, array, object, date."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "What this input contains."
+                },
+                "required": {
+                  "type": "boolean",
+                  "description": "Whether this input is required for the skill to run."
+                },
+                "example": {
+                  "description": "A concrete example value."
+                }
+              }
+            }
+          },
+          "outputs": {
+            "type": "object",
+            "description": "Output fields. Each key is a field name; each value describes it.",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["type", "description"],
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "Data type."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "What this output contains."
+                },
+                "example": {
+                  "description": "A concrete example value."
+                }
+              }
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "description": "Abstract capability names this skill uses. The runtime maps these to real tools via the adapter layer. Examples: send_message, lookup_record, write_file, read_spreadsheet.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "approval_required": {
+            "type": "boolean",
+            "description": "Whether a human must approve before this skill executes. Must be consistent with 05-guardrails.md."
+          },
+          "approval_format": {
+            "type": "string",
+            "description": "If approval_required is true: what the approval request must include. Example: 'Slack DM to @ops-lead with draft output attached'."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Anything a developer needs to know when implementing this skill."
+          }
+        }
+      }
+    }
+  }
+}

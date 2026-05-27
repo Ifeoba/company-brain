@@ -1,0 +1,51 @@
+{
+  "$schema": "../schemas/evals.schema.json",
+  "service": "REPLACE WITH: the one-sentence service definition from 01-service-definition.md",
+  "version": "1.0",
+  "evals": [
+    {
+      "id": "EVAL-001",
+      "description": "REPLACE WITH: one sentence describing what this case tests",
+      "difficulty": "routine",
+      "source": "REPLACE WITH: where this case came from — e.g. 'historical ticket #1234', 'Priya interview 2025-04'",
+      "input": {
+        "REPLACE_WITH_INPUT_FIELD": "REPLACE_WITH_INPUT_VALUE"
+      },
+      "expected_output": {
+        "decision": "REPLACE WITH: what the agent should decide",
+        "action": "REPLACE WITH: what the agent should do",
+        "escalate": false,
+        "notes": "REPLACE WITH: anything a reviewer needs to know when checking this case"
+      }
+    },
+    {
+      "id": "EVAL-002",
+      "description": "REPLACE WITH: an edge case — unusual but has a clear rule",
+      "difficulty": "edge",
+      "source": "REPLACE WITH: source",
+      "input": {
+        "REPLACE_WITH_INPUT_FIELD": "REPLACE_WITH_INPUT_VALUE"
+      },
+      "expected_output": {
+        "decision": "REPLACE WITH: what the agent should decide",
+        "escalate": false,
+        "notes": "REPLACE WITH: which rule in 03-decision-rules.md covers this"
+      }
+    },
+    {
+      "id": "EVAL-003",
+      "description": "REPLACE WITH: a hard case — non-obvious; a smart new hire would likely get it wrong",
+      "difficulty": "hard",
+      "source": "REPLACE WITH: source — hard cases should come from real history, not imagination",
+      "input": {
+        "REPLACE_WITH_INPUT_FIELD": "REPLACE_WITH_INPUT_VALUE"
+      },
+      "expected_output": {
+        "decision": "REPLACE WITH: the correct (non-obvious) decision",
+        "escalate": true,
+        "escalation_reason": "REPLACE WITH: why this specific case escalates",
+        "notes": "REPLACE WITH: what the wrong answer looks like and why someone would pick it"
+      }
+    }
+  ]
+}
