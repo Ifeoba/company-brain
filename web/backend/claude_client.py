@@ -1,3 +1,4 @@
+from __future__ import annotations
 import anthropic
 from .config import settings
 from .crypto import decrypt_key

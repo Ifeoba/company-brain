@@ -1,6 +1,6 @@
 from __future__ import annotations
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 from pydantic import BaseModel, field_validator
 import re
 
@@ -27,7 +27,7 @@ class SetApiKeyRequest(BaseModel):
 
 class BrainCreate(BaseModel):
     name: str
-    slug: str | None = None
+    slug: Optional[str] = None
 
     @field_validator("slug", mode="before")
     @classmethod
@@ -62,7 +62,7 @@ class FileSummary(BaseModel):
     filename: str
     has_content: bool
     placeholder_count: int
-    updated_at: datetime | None
+    updated_at: Optional[datetime]
 
     class Config:
         from_attributes = True
@@ -71,7 +71,7 @@ class FileSummary(BaseModel):
 class FileContent(BaseModel):
     filename: str
     content: str
-    updated_at: datetime | None
+    updated_at: Optional[datetime]
 
 
 class FileUpdate(BaseModel):
@@ -175,7 +175,7 @@ class ExpertQuestionOut(BaseModel):
     status: str
     created_at: datetime
     expires_at: datetime
-    answer_text: str | None
+    answer_text: Optional[str]
 
     class Config:
         from_attributes = True
@@ -188,7 +188,7 @@ class PublicQuestionOut(BaseModel):
     question_text: str
     context_text: str
     already_answered: bool
-    existing_answer: str | None
+    existing_answer: Optional[str]
 
 
 class ExpertAnswerRequest(BaseModel):
