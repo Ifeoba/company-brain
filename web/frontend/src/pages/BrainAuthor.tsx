@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import {
   useBrain, useCollaborators, useExpertQuestions, useExport,
-  useInterview, useReadiness,
+  useInterview, useMe, useReadiness,
 } from "../api/hooks";
 import AskExpertModal from "../components/AskExpertModal";
+import Avatar from "../components/Avatar";
 import FilePreview from "../components/FilePreview";
+import Icon from "../components/Icon";
 import QuestionPane from "../components/QuestionPane";
 import StepSidebar from "../components/StepSidebar";
 import ValidationDrawer from "../components/ValidationDrawer";
@@ -17,6 +19,7 @@ export default function BrainAuthor() {
   const { data: readiness } = useReadiness(slug!);
   const { data: collaborators = [] } = useCollaborators(slug!);
   const { data: expertQuestions = [] } = useExpertQuestions(slug!);
+  const { data: user } = useMe();
   const exportBrain = useExport(slug!);
 
   const [activeStep, setActiveStep] = useState(1);
@@ -28,8 +31,8 @@ export default function BrainAuthor() {
 
   if (!brain || !interview) {
     return (
-      <div className="flex items-center justify-center h-screen text-sm text-gray-400">
-        Loading…
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+        <span className="dim">Loading…</span>
       </div>
     );
   }
@@ -50,8 +53,7 @@ export default function BrainAuthor() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-48px)] overflow-hidden bg-white dark:bg-[#0f0f0f]">
-      {/* Sidebar */}
+    <div className="ba-shell">
       <StepSidebar
         slug={slug!}
         brainName={brain.slug}
@@ -61,99 +63,90 @@ export default function BrainAuthor() {
         onStepClick={setActiveStep}
       />
 
-      {/* Main pane */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Top bar */}
-        <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-3 border-b border-gray-100 dark:border-gray-800 bg-white/95 dark:bg-[#0f0f0f]/95 backdrop-blur-sm">
-          <h1 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{brain.name}</h1>
-          <div className="flex items-center gap-3">
-            {answeredQuestions.length > 0 && (
-              <button
-                onClick={() => setShowAnswers(!showAnswers)}
-                className="text-xs text-[#7cf29c] font-medium"
-              >
-                {answeredQuestions.length} expert answer{answeredQuestions.length > 1 ? "s" : ""}
-              </button>
-            )}
-            <button
-              onClick={() => setShowValidation(true)}
-              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
-            >
-              Readiness check
-            </button>
-            <button
-              onClick={() => exportBrain.mutate()}
-              disabled={exportBrain.isPending}
-              className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 disabled:opacity-50"
-            >
-              {exportBrain.isPending ? "Exporting…" : "Export ↓"}
-            </button>
+      <div className="ba-main">
+        {/* Topbar */}
+        <div className="ba-topbar">
+          <span className="wordmark">
+            <span className="brand-mark" />
+            Company Brain
+          </span>
+          <span style={{ color: "var(--dimmer)" }}>/</span>
+          <div className="crumb">
+            <Link to="/">Brains</Link>
+            <span className="sep">›</span>
+            <span>{brain.name}</span>
           </div>
+          <div className="spacer" />
+          {answeredQuestions.length > 0 && (
+            <button className="btn btn-sm btn-ghost text-accent" onClick={() => setShowAnswers(!showAnswers)}>
+              {answeredQuestions.length} expert answer{answeredQuestions.length > 1 ? "s" : ""}
+            </button>
+          )}
+          <button className="btn btn-sm" onClick={() => setShowValidation(true)}>
+            Readiness check
+          </button>
+          <button
+            className="btn btn-sm"
+            onClick={() => exportBrain.mutate()}
+            disabled={exportBrain.isPending}
+          >
+            <Icon name="download" size={11} />
+            {exportBrain.isPending ? "Exporting…" : "Export"}
+          </button>
+          {user && <Avatar name={user.github_username} />}
         </div>
 
-        <div className="px-6 py-6 max-w-3xl">
-          {/* Expert answers panel */}
-          {showAnswers && answeredQuestions.length > 0 && (
-            <div className="mb-6 border border-[#7cf29c]/30 rounded-lg p-4 bg-[#7cf29c]/5">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Expert answers for this step
-                </h3>
-                <button onClick={() => setShowAnswers(false)} className="text-gray-400 text-sm">×</button>
-              </div>
-              {answeredQuestions.map((q) => (
-                <div key={q.id} className="mb-3 last:mb-0">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                    From {q.collaborator_name} · {q.question_text}
-                  </p>
-                  <p className="text-sm text-gray-800 dark:text-gray-200 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded p-3">
-                    {q.answer_text}
-                  </p>
+        {/* Content */}
+        <div className="ba-content">
+          <div className="ba-section">
+            {/* Expert answers panel */}
+            {showAnswers && answeredQuestions.length > 0 && (
+              <div className="ba-expert-panel">
+                <div className="ba-expert-panel-head">
+                  <span>Expert answers for this step</span>
+                  <button onClick={() => setShowAnswers(false)}>×</button>
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Interview questions */}
-          <QuestionPane
-            slug={slug!}
-            step={step}
-            interview={interview}
-            collaborators={collaborators}
-            onDraftReady={handleDraftReady}
-            onAskExpert={(questionText) => {
-              const currentQ = step.questions[interview.current_question_index] ?? step.questions[0];
-              setAskExpertModal({ questionText, questionKey: currentQ?.key ?? "" });
-            }}
-          />
-
-          {/* File preview */}
-          {primaryFile && (
-            <div className="mt-6">
-              <FilePreview
-                slug={slug!}
-                filename={primaryFile}
-                draftContent={draftContent[primaryFile]}
-              />
-              {step.files.length + step.json_files.length > 1 &&
-                [...step.files, ...step.json_files].slice(1).map((f) => (
-                  <div key={f} className="mt-3">
-                    <FilePreview slug={slug!} filename={f} draftContent={draftContent[f]} />
+                {answeredQuestions.map((q) => (
+                  <div key={q.id} className="ba-expert-item">
+                    <div className="ba-expert-item-meta">
+                      From {q.collaborator_name} · {q.question_text}
+                    </div>
+                    <div className="ba-expert-item-text">{q.answer_text}</div>
                   </div>
                 ))}
-            </div>
-          )}
+              </div>
+            )}
+
+            <QuestionPane
+              slug={slug!}
+              step={step}
+              interview={interview}
+              collaborators={collaborators}
+              onDraftReady={handleDraftReady}
+              onAskExpert={(questionText) => {
+                const currentQ = step.questions[interview.current_question_index] ?? step.questions[0];
+                setAskExpertModal({ questionText, questionKey: currentQ?.key ?? "" });
+              }}
+            />
+
+            {primaryFile && (
+              <>
+                <FilePreview
+                  slug={slug!}
+                  filename={primaryFile}
+                  draftContent={draftContent[primaryFile]}
+                />
+                {[...step.files, ...step.json_files].slice(1).map((f) => (
+                  <FilePreview key={f} slug={slug!} filename={f} draftContent={draftContent[f]} />
+                ))}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-5 right-5 z-50 bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm px-4 py-2.5 rounded shadow-lg">
-          {toast}
-        </div>
-      )}
+      {toast && <div className="ba-toast">{toast}</div>}
 
-      {/* Ask Expert Modal */}
       {askExpertModal && (
         <AskExpertModal
           slug={slug!}
@@ -166,7 +159,6 @@ export default function BrainAuthor() {
         />
       )}
 
-      {/* Validation drawer */}
       {showValidation && readiness && (
         <ValidationDrawer readiness={readiness} onClose={() => setShowValidation(false)} />
       )}

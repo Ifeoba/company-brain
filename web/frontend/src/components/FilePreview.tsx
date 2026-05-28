@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFile, useUpdateFile } from "../api/hooks";
+import Icon from "./Icon";
 
 interface Props {
   slug: string;
@@ -30,51 +31,62 @@ export default function FilePreview({ slug, filename, draftContent }: Props) {
   if (!filename) return null;
 
   return (
-    <div className="rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-gray-700">
-        <span className="smallcaps text-gray-400 dark:text-gray-500 tracking-widest">
-          Preview — {filename.toUpperCase()}
-        </span>
-        <div className="flex items-center gap-3">
-          {saved && <span className="text-xs text-[#7cf29c]">Saved</span>}
+    <div className="ba-preview">
+      <div className="header">
+        <span className="fname">Preview — {filename}</span>
+        <div className="ctrls">
+          {saved && <span className="micro text-accent">Saved</span>}
           {editMode ? (
             <>
-              <button onClick={() => setEditMode(false)} className="text-xs text-gray-400 hover:text-gray-600">
+              <button className="btn btn-sm btn-ghost" onClick={() => setEditMode(false)}>
                 Cancel
               </button>
               <button
+                className="btn btn-sm btn-primary"
                 onClick={handleSave}
                 disabled={updateFile.isPending}
-                className="text-xs text-gray-900 dark:text-gray-100 font-medium hover:opacity-80 disabled:opacity-50"
               >
                 {updateFile.isPending ? "Saving…" : "Save"}
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setEditMode(true)}
-              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            >
-              Edit directly
+            <button className="btn btn-sm btn-ghost" onClick={() => setEditMode(true)}>
+              <Icon name="copy" size={11} /> Copy
             </button>
           )}
         </div>
       </div>
 
-      {/* Content */}
       {editMode ? (
-        <textarea
-          className="w-full font-mono text-xs leading-relaxed p-4 bg-white dark:bg-[#111] text-gray-800 dark:text-gray-200 resize-none focus:outline-none min-h-[320px]"
-          value={editContent}
-          onChange={(e) => setEditContent(e.target.value)}
-          spellCheck={false}
-        />
+        <div className="edit-body">
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            spellCheck={false}
+          />
+        </div>
       ) : (
-        <pre className="font-mono text-xs leading-relaxed p-4 bg-gray-50 dark:bg-[#111] text-gray-800 dark:text-gray-200 overflow-x-auto whitespace-pre-wrap min-h-[120px] max-h-[480px] overflow-y-auto scrollbar-thin">
-          {displayContent || <span className="text-gray-300 dark:text-gray-600 italic">No content yet. Answer the questions and click "Draft from answer".</span>}
-        </pre>
+        <div className="body">
+          {displayContent ? (
+            displayContent
+          ) : (
+            <span className="empty-hint">
+              No content yet. Answer the questions and click "Draft from answer".
+            </span>
+          )}
+        </div>
       )}
+
+      <div className="footer">
+        <button className="edit-link" onClick={() => setEditMode(true)}>
+          <Icon name="edit" size={11} /> Edit directly
+        </button>
+        <span className="mono" style={{ fontSize: 10.5, color: "var(--dim)" }}>
+          {fileData?.updated_at
+            ? `updated ${new Date(fileData.updated_at).toLocaleTimeString()}`
+            : "not yet generated"}
+        </span>
+      </div>
     </div>
   );
 }

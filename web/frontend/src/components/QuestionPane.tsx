@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Collaborator, InterviewState, Step } from "../types";
 import { useGenerate, useSaveAnswer, useUpdateProgress } from "../api/hooks";
+import Icon from "./Icon";
 
 interface Props {
   slug: string;
@@ -28,7 +29,12 @@ function SavedIndicator({ lastSaved }: { lastSaved: Date | null }) {
   }, [lastSaved]);
 
   if (!lastSaved) return null;
-  return <span className="text-xs text-gray-400 dark:text-gray-500">{label}</span>;
+  return (
+    <span className="ba-save-state">
+      <span className="dot" style={{ background: "var(--accent)" }} />
+      {label}
+    </span>
+  );
 }
 
 export default function QuestionPane({ slug, step, interview, collaborators, onDraftReady, onAskExpert }: Props) {
@@ -47,23 +53,20 @@ export default function QuestionPane({ slug, step, interview, collaborators, onD
   const updateProgress = useUpdateProgress(slug);
   const generate = useGenerate(slug);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
       el.style.height = "auto";
-      el.style.height = `${Math.max(90, el.scrollHeight)}px`;
+      el.style.height = `${Math.max(130, el.scrollHeight)}px`;
     }
   }, [answer]);
 
-  // Load saved answer when question changes
   useEffect(() => {
     const saved = interview.answers[String(step.number)]?.[question?.key] ?? "";
     setAnswer(saved);
     setDraftError("");
   }, [question?.key, step.number, interview.answers]);
 
-  // Debounced autosave
   useEffect(() => {
     if (!question) return;
     const t = setTimeout(async () => {
@@ -98,86 +101,78 @@ export default function QuestionPane({ slug, step, interview, collaborators, onD
   const primaryCollab = collaborators[0];
 
   return (
-    <div className="flex flex-col gap-5">
-      {/* Step header */}
-      <div className="flex items-center justify-between">
-        <span className="smallcaps text-gray-400 dark:text-gray-500">
-          Step {step.number} — {step.name}
-        </span>
-        <span className="text-xs text-gray-400 dark:text-gray-500">
-          Question {localQIndex + 1} of {totalQ}
-        </span>
+    <div>
+      <div className="ba-step-head">
+        <div className="left">
+          <span className="micro">Step 0{step.number} — {step.name}</span>
+          <h1>{question?.text ?? "—"}</h1>
+        </div>
+        <span className="micro">Question {localQIndex + 1} of {totalQ}</span>
       </div>
 
-      {/* Question */}
       {question && (
-        <div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 whitespace-pre-line leading-relaxed mb-3">
-            {question.text}
-          </p>
+        <div className="ba-q">
           <textarea
             ref={textareaRef}
-            className="w-full border border-gray-200 dark:border-gray-700 rounded px-3 py-2.5 text-sm bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 resize-none focus:outline-none focus:border-gray-400 dark:focus:border-gray-500 transition-colors"
-            style={{ minHeight: 90 }}
-            placeholder="Type your answer here…"
+            className="textarea"
+            style={{ minHeight: 130 }}
+            placeholder="Type your answer here. Plain English is perfect — no formatting required."
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
           />
         </div>
       )}
 
-      {/* Action row */}
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="ba-actions">
         <button
+          className="btn btn-primary"
           onClick={handleDraft}
           disabled={generate.isPending}
-          className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm px-4 py-2 rounded font-medium hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
         >
           {generate.isPending ? (
             <>
-              <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+              <svg className="spin" width={13} height={13} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}>
+                <path d="M8 2a6 6 0 100 12A6 6 0 008 2z" strokeDasharray="20" strokeDashoffset="5" />
               </svg>
               Drafting…
             </>
           ) : (
-            "Draft from answer"
+            <>
+              <Icon name="spark" size={13} /> Draft from answer
+            </>
           )}
         </button>
 
         <button
+          className="btn"
           onClick={() => onAskExpert(question?.text ?? "")}
-          className="text-sm px-4 py-2 rounded border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
         >
+          <Icon name="paperplane" size={13} />
           Ask {primaryCollab?.name.split(" ")[0] ?? "someone"}
         </button>
 
-        <div className="flex-1" />
+        <div className="spacer" />
         <SavedIndicator lastSaved={lastSaved} />
       </div>
 
       {draftError && (
-        <p className="text-red-500 text-xs bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded">
-          {draftError}
-        </p>
+        <div className="ba-draft-error">{draftError}</div>
       )}
 
-      {/* Question navigation */}
-      <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-800">
+      <div className="ba-nav">
         <button
+          className="btn btn-ghost"
           onClick={() => goTo(localQIndex - 1)}
           disabled={localQIndex === 0}
-          className="text-sm text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
         >
-          ← Previous question
+          <Icon name="arrow_left" size={12} /> Previous question
         </button>
         <button
+          className="btn btn-ghost"
           onClick={() => goTo(localQIndex + 1)}
           disabled={localQIndex >= totalQ - 1}
-          className="text-sm text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
         >
-          Next question →
+          Next question <Icon name="arrow_right" size={12} />
         </button>
       </div>
     </div>

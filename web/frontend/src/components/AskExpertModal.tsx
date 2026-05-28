@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { Collaborator } from "../types";
 import { useAddCollaborator, useAskExpert } from "../api/hooks";
+import { avatarColors } from "./Avatar";
+import Icon from "./Icon";
 
 interface Props {
   slug: string;
@@ -24,6 +26,7 @@ export default function AskExpertModal({ slug, step, questionKey, questionText, 
   const askExpert = useAskExpert(slug);
 
   const isNew = selectedCollabId === "new";
+  const selectedCollab = collaborators.find((c) => c.id === selectedCollabId);
 
   async function handleSend() {
     setError("");
@@ -44,7 +47,7 @@ export default function AskExpertModal({ slug, step, questionKey, questionText, 
     }
 
     try {
-      const q = await askExpert.mutateAsync({
+      await askExpert.mutateAsync({
         collaborator_id: collabId,
         step,
         question_key: questionKey,
@@ -60,36 +63,61 @@ export default function AskExpertModal({ slug, step, questionKey, questionText, 
   }
 
   const isPending = addCollab.isPending || askExpert.isPending;
+  const recipientFirstName = isNew
+    ? (newName.split(" ")[0] || "expert")
+    : (selectedCollab?.name.split(" ")[0] ?? "expert");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-lg p-6 w-[480px] shadow-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="font-semibold text-sm mb-4 text-gray-900 dark:text-gray-100">Ask a question to</h2>
+    <div className="modal-scrim">
+      <div className="modal-card">
+        <h2>Ask one question to an expert</h2>
+        <div className="modal-sub">They'll get a friendly email with a link to answer — no login needed.</div>
 
-        {/* Collaborator selector */}
-        <select
-          className="w-full border border-gray-200 dark:border-gray-700 rounded px-3 py-2 text-sm bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 mb-3 focus:outline-none"
-          value={selectedCollabId}
-          onChange={(e) => setSelectedCollabId(e.target.value)}
-        >
-          {collaborators.map((c) => (
-            <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
-          ))}
-          <option value="new">+ Invite someone new</option>
-        </select>
+        <div className="modal-row">
+          <span className="label">Send to</span>
+          <div className="collab-select-wrap">
+            <div className="collab-select">
+              {selectedCollab && (() => {
+                const [a, b] = avatarColors(selectedCollab.color_seed);
+                return (
+                  <div className="avatar" style={{ background: `linear-gradient(135deg, ${a}, ${b})` }}>
+                    {selectedCollab.initials}
+                  </div>
+                );
+              })()}
+              {isNew ? (
+                <span style={{ flex: 1, color: "var(--dim)" }}>+ Invite someone new</span>
+              ) : (
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: "var(--text)" }}>{selectedCollab?.name}</div>
+                  <div className="mono" style={{ fontSize: 10.5, color: "var(--dim)" }}>{selectedCollab?.email}</div>
+                </div>
+              )}
+              <Icon name="chevron_down" size={12} color="var(--dim)" />
+            </div>
+            <select
+              value={selectedCollabId}
+              onChange={(e) => setSelectedCollabId(e.target.value)}
+            >
+              {collaborators.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+              ))}
+              <option value="new">+ Invite someone new</option>
+            </select>
+          </div>
+        </div>
 
-        {/* New collaborator fields */}
         {isNew && (
-          <div className="flex gap-2 mb-3">
+          <div className="collab-inline-fields">
             <input
-              className="flex-1 border border-gray-200 dark:border-gray-700 rounded px-3 py-2 text-sm bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 focus:outline-none"
+              className="input"
               placeholder="Name"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               autoFocus
             />
             <input
-              className="flex-1 border border-gray-200 dark:border-gray-700 rounded px-3 py-2 text-sm bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 focus:outline-none"
+              className="input"
               placeholder="Email"
               type="email"
               value={newEmail}
@@ -98,37 +126,34 @@ export default function AskExpertModal({ slug, step, questionKey, questionText, 
           </div>
         )}
 
-        {/* Question */}
-        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Your question</label>
-        <textarea
-          className="w-full border border-gray-200 dark:border-gray-700 rounded px-3 py-2 text-sm bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 resize-none focus:outline-none mb-3"
-          rows={3}
-          value={editedQuestion}
-          onChange={(e) => setEditedQuestion(e.target.value)}
-        />
+        <div className="modal-row" style={{ marginTop: isNew ? 14 : 0 }}>
+          <span className="label">Your question</span>
+          <textarea
+            className="textarea"
+            style={{ minHeight: 70 }}
+            value={editedQuestion}
+            onChange={(e) => setEditedQuestion(e.target.value)}
+          />
+        </div>
 
-        {/* Context */}
-        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Add context (optional)</label>
-        <textarea
-          className="w-full border border-gray-200 dark:border-gray-700 rounded px-3 py-2 text-sm bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 resize-none focus:outline-none mb-4"
-          rows={2}
-          placeholder="Hi — I'm building an AI tool for X, quick one for you…"
-          value={context}
-          onChange={(e) => setContext(e.target.value)}
-        />
+        <div className="modal-row">
+          <span className="label">Add context (optional)</span>
+          <textarea
+            className="textarea"
+            style={{ minHeight: 60 }}
+            placeholder="Hi — I'm building an AI tool for X, quick one for you…"
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+          />
+        </div>
 
-        {error && <p className="text-red-500 text-xs mb-3">{error}</p>}
+        {error && <div className="error-msg">{error}</div>}
 
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-2">
-            Cancel
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={isPending}
-            className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm px-5 py-2 rounded font-medium hover:opacity-90 disabled:opacity-50"
-          >
-            {isPending ? "Sending…" : "Send"}
+        <div className="footer-row">
+          <button className="btn" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSend} disabled={isPending}>
+            <Icon name="paperplane" size={12} />
+            {isPending ? "Sending…" : `Send to ${recipientFirstName}`}
           </button>
         </div>
       </div>

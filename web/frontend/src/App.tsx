@@ -8,43 +8,51 @@ import Settings from "./pages/Settings";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading, isError } = useMe();
-  if (isLoading) return <div className="flex items-center justify-center h-screen text-gray-400 text-sm">Loading…</div>;
+  if (isLoading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+        <span className="dim">Loading…</span>
+      </div>
+    );
+  }
   if (isError || !user) return <Navigate to="/login" replace />;
   return <>{children}</>;
 }
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/q/:token" element={<ExpertAnswer />} />
-        <Route
-          path="/"
-          element={
-            <RequireAuth>
-              <BrainsList />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/brains/:slug"
-          element={
-            <RequireAuth>
-              <BrainAuthor />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <RequireAuth>
-              <Settings />
-            </RequireAuth>
-          }
-        />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <div className="brain-ui" style={{ height: "100%" }}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/q/:token" element={<ExpertAnswer />} />
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <BrainsList />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/brains/:slug"
+            element={
+              <RequireAuth>
+                <BrainAuthor />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <Settings />
+              </RequireAuth>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </div>
   );
 }

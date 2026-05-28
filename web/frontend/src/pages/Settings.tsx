@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDeleteApiKey, useMe, useSetApiKey } from "../api/hooks";
-import Layout from "../components/Layout";
+import AppTopbar from "../components/Layout";
+import Icon from "../components/Icon";
 
 export default function Settings() {
   const { data: user } = useMe();
@@ -30,75 +31,89 @@ export default function Settings() {
   }
 
   return (
-    <Layout>
-      <div className="max-w-lg mx-auto px-6 py-10">
-        <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-8">Settings</h1>
+    <div className="settings-shell">
+      <AppTopbar />
+      <div className="settings-main">
+        <div className="inner">
+          <div className="settings-head">
+            <h1>Settings</h1>
+            {user && (
+              <span className="ws-label">workspace · {user.github_username}</span>
+            )}
+          </div>
 
-        {/* Anthropic API key */}
-        <section className="mb-8">
-          <h2 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Anthropic API key</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            Required to use "Draft from answer". Your key is encrypted at rest and never logged.{" "}
-            <a
-              href="https://console.anthropic.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline"
-            >
-              Get a key →
-            </a>
-          </p>
-
-          {user?.has_anthropic_key && (
-            <div className="flex items-center gap-3 mb-4 text-xs text-gray-600 dark:text-gray-400">
-              <span className="text-[#7cf29c]">✓</span>
-              <span>API key is set</span>
-              <button
-                onClick={handleDelete}
-                disabled={deleteKey.isPending}
-                className="text-red-400 hover:text-red-600 ml-2 disabled:opacity-50"
-              >
-                Remove
-              </button>
+          <div className="settings-section">
+            <h3>
+              <Icon name="key" size={14} />
+              Anthropic API key
+            </h3>
+            <div className="desc">
+              Required to run the interview. Your key is encrypted at rest and used only to draft
+              files from your answers.{" "}
+              <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">
+                How to get one →
+              </a>
             </div>
-          )}
 
-          <form onSubmit={handleSave} className="flex gap-2">
-            <input
-              type="password"
-              className="flex-1 border border-gray-200 dark:border-gray-700 rounded px-3 py-2 text-sm bg-white dark:bg-[#111] text-gray-900 dark:text-gray-100 focus:outline-none focus:border-gray-400 font-mono"
-              placeholder={user?.has_anthropic_key ? "sk-ant-... (enter new key to replace)" : "sk-ant-..."}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-            <button
-              type="submit"
-              disabled={setKey.isPending || !apiKey}
-              className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-sm px-4 py-2 rounded font-medium hover:opacity-90 disabled:opacity-50"
-            >
-              {setKey.isPending ? "Saving…" : "Save"}
-            </button>
-          </form>
-          {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
-          {saved && <p className="text-[#7cf29c] text-xs mt-2">Saved.</p>}
-        </section>
+            {user?.has_anthropic_key && (
+              <div className="status-line" style={{ marginBottom: 12 }}>
+                <span className="ok">● connected</span>
+                {" · "}
+                <button
+                  className="btn btn-sm btn-danger"
+                  onClick={handleDelete}
+                  disabled={deleteKey.isPending}
+                  style={{ display: "inline", padding: 0, border: "none", background: "none", fontSize: "inherit" }}
+                >
+                  {deleteKey.isPending ? "Removing…" : "Remove key"}
+                </button>
+              </div>
+            )}
 
-        {/* Email */}
-        <section className="mb-8">
-          <h2 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Email (Resend)</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Email is configured at the workspace level via <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">RESEND_API_KEY</code> and{" "}
-            <code className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded">RESEND_FROM_EMAIL</code> environment variables. See the README for setup instructions.
-          </p>
-        </section>
+            <form onSubmit={handleSave}>
+              <div className="field-row">
+                <input
+                  type="password"
+                  className="input key-input"
+                  placeholder={user?.has_anthropic_key ? "sk-ant-… (enter new key to replace)" : "sk-ant-…"}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                />
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={setKey.isPending || !apiKey}
+                >
+                  {setKey.isPending ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </form>
 
-        {/* Sign out */}
-        <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
-          <a href="/api/auth/logout" className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-            Sign out
-          </a>
+            {error && <div className="status-line" style={{ color: "var(--bad)", marginTop: 8 }}>{error}</div>}
+            {saved && <div className="status-line" style={{ color: "var(--ok)", marginTop: 8 }}>Saved.</div>}
+          </div>
+
+          <div className="settings-section">
+            <h3>Email sender</h3>
+            <div className="desc">
+              Expert questions are sent from this address. Configured at the workspace level via{" "}
+              <code className="mono">RESEND_API_KEY</code> and{" "}
+              <code className="mono">RESEND_FROM_EMAIL</code> environment variables.
+            </div>
+          </div>
+
+          <div className="settings-footer">
+            <a href="/api/auth/logout" className="btn">
+              <Icon name="logout" size={12} /> Sign out
+            </a>
+            {user && (
+              <span className="user-label">
+                Signed in as <b>{user.github_username}</b>
+              </span>
+            )}
+          </div>
         </div>
       </div>
-    </Layout>
+    </div>
   );
 }
