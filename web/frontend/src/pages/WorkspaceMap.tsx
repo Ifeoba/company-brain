@@ -1,98 +1,173 @@
-import { useLayoutEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import ReactFlow, {
+  Background, Controls, Handle, MarkerType,
+  Position, useEdgesState, useNodesState,
+} from "reactflow";
+import type { Connection, Edge, NodeProps } from "reactflow";
+import "reactflow/dist/style.css";
 import { useConfirmSuggestion, useDiscoverRelationships, useWorkspaceMap } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
-import type { RelationshipSuggestion, WorkspaceNode } from "../types";
+import type { RelationshipSuggestion } from "../types";
 
-const NW = 164;
-const NH = 76;
+const REL_COLORS: Record<string, string> = {
+  "depends-on": "#c93030",
+  "uses": "#2563d9",
+  "related-to": "#757572",
+  "feeds-into": "#7c47d6",
+};
 
-function circularPositions(count: number, w: number, h: number) {
-  const cx = w / 2, cy = h / 2;
+function edgeStyle(relType: string) {
+  const color = REL_COLORS[relType] ?? "#c0bfba";
+  return {
+    style: { stroke: color, strokeWidth: 1.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, color },
+    label: relType,
+    labelStyle: { fill: color, fontSize: 10, fontFamily: "IBM Plex Mono, monospace" },
+    labelBgStyle: { fill: "#fafaf8", fillOpacity: 0.9 },
+    labelBgPadding: [4, 3] as [number, number],
+    labelBgBorderRadius: 3,
+  };
+}
+
+function BrainNode({ data }: NodeProps) {
+  const scoreColor =
+    data.score >= 80 ? "#2d8a4e" : data.score >= 50 ? "#b27800" : "#c93030";
+  return (
+    <div className="wm-rnode">
+      <Handle type="target" position={Position.Left} id="l" className="wm-handle" />
+      <Handle type="target" position={Position.Top} id="t" className="wm-handle" />
+      <Handle type="source" position={Position.Right} id="r" className="wm-handle" />
+      <Handle type="source" position={Position.Bottom} id="b" className="wm-handle" />
+      <div className="wm-rnode-name">{data.name}</div>
+      <div className="wm-rnode-score" style={{ color: scoreColor }}>
+        {data.score}<span style={{ color: "#9a9a96", fontWeight: 400 }}>/100</span>
+      </div>
+    </div>
+  );
+}
+
+const nodeTypes = { brainNode: BrainNode };
+
+function loadPositions(): Record<string, { x: number; y: number }> {
+  try { return JSON.parse(localStorage.getItem("wm-positions") ?? "{}"); }
+  catch { return {}; }
+}
+function savePositions(p: Record<string, { x: number; y: number }>) {
+  localStorage.setItem("wm-positions", JSON.stringify(p));
+}
+
+function circLayout(count: number) {
+  const cx = 480, cy = 320;
   if (count === 0) return [];
-  if (count === 1) return [{ x: cx - NW / 2, y: cy - NH / 2 }];
-  const r = Math.min(cx * 0.68, cy * 0.68);
+  if (count === 1) return [{ x: cx, y: cy }];
+  const r = Math.min(260, 100 + count * 28);
   return Array.from({ length: count }, (_, i) => {
-    const angle = (2 * Math.PI * i / count) - Math.PI / 2;
-    return { x: cx + r * Math.cos(angle) - NW / 2, y: cy + r * Math.sin(angle) - NH / 2 };
+    const a = (2 * Math.PI * i / count) - Math.PI / 2;
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
   });
 }
 
-const REL_COLOR: Record<string, string> = {
-  "depends-on": "var(--bad)",
-  "uses": "var(--info)",
-  "related-to": "var(--dim)",
-  "feeds-into": "var(--drift)",
-};
-
 export default function WorkspaceMap() {
-  const { data: nodes = [], isLoading } = useWorkspaceMap();
+  const { data: mapData = [], isLoading } = useWorkspaceMap();
   const discover = useDiscoverRelationships();
-  const confirmSuggestion = useConfirmSuggestion();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [positions, setPositions] = useState<Array<{ x: number; y: number }>>([]);
+  const confirmMut = useConfirmSuggestion();
+
+  const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
+  const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState([]);
   const [suggestions, setSuggestions] = useState<RelationshipSuggestion[]>([]);
-  const navigate = useNavigate();
+  const [pending, setPending] = useState<{ source: string; target: string } | null>(null);
+  const [connType, setConnType] = useState("depends-on");
+  const [connError, setConnError] = useState("");
+
+  useEffect(() => {
+    const saved = loadPositions();
+    const circ = circLayout(mapData.length);
+    setRfNodes((prev) => {
+      const prevPos = Object.fromEntries(prev.map((n) => [n.id, n.position]));
+      return mapData.map((n, i) => ({
+        id: n.slug,
+        type: "brainNode",
+        position: prevPos[n.slug] ?? saved[n.slug] ?? circ[i] ?? { x: 0, y: 0 },
+        data: { name: n.name, score: n.readiness_score, status: n.status },
+      }));
+    });
+    setRfEdges(
+      mapData.flatMap((n) =>
+        n.relationships.map((r) => ({
+          id: r.id,
+          source: r.from_slug,
+          target: r.to_slug,
+          ...edgeStyle(r.rel_type),
+        }))
+      )
+    );
+  }, [mapData]);
+
+  const onNodeDragStop = useCallback((_: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
+    const saved = loadPositions();
+    saved[node.id] = node.position;
+    savePositions(saved);
+  }, []);
+
+  const onConnect = useCallback((conn: Connection) => {
+    if (conn.source && conn.target && conn.source !== conn.target) {
+      setPending({ source: conn.source, target: conn.target });
+      setConnError("");
+    }
+  }, []);
 
   async function handleDiscover() {
     const found = await discover.mutateAsync();
     setSuggestions(found);
+    if (!found.length) alert("No new connections found — add more content to your brains first.");
   }
 
-  function dismissSuggestion(idx: number) {
+  async function handleConfirmSuggestion(s: RelationshipSuggestion, idx: number) {
+    await confirmMut.mutateAsync({ from_slug: s.from_slug, to_slug: s.to_slug, rel_type: s.rel_type });
     setSuggestions((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  async function handleConfirm(s: RelationshipSuggestion, idx: number) {
-    await confirmSuggestion.mutateAsync({ from_slug: s.from_slug, to_slug: s.to_slug, rel_type: s.rel_type });
-    dismissSuggestion(idx);
+  async function handleConfirmConn() {
+    if (!pending) return;
+    setConnError("");
+    try {
+      await confirmMut.mutateAsync({ from_slug: pending.source, to_slug: pending.target, rel_type: connType });
+      setPending(null);
+    } catch (e: unknown) {
+      setConnError(e instanceof Error ? e.message : "Failed to add connection");
+    }
   }
 
-  useLayoutEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const calc = () => {
-      const { width, height } = el.getBoundingClientRect();
-      setPositions(circularPositions(nodes.length, width, height));
-    };
-    calc();
-    const obs = new ResizeObserver(calc);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [nodes.length]);
-
-  const slugToIdx = Object.fromEntries(nodes.map((n, i) => [n.slug, i]));
-  const allRels = nodes.flatMap((n) => n.relationships);
-
-  function center(slug: string) {
-    const p = positions[slugToIdx[slug]];
-    if (!p) return null;
-    return { x: p.x + NW / 2, y: p.y + NH / 2 };
-  }
+  const fromName = mapData.find((n) => n.slug === pending?.source)?.name ?? "";
+  const toName = mapData.find((n) => n.slug === pending?.target)?.name ?? "";
 
   return (
     <div className="bl-shell">
       <AppTopbar />
 
-      {/* Discovery toolbar */}
-      {!isLoading && nodes.length >= 2 && (
+      {!isLoading && mapData.length >= 2 && (
         <div className="wm-toolbar">
-          <button
-            className="btn btn-sm btn-ghost"
-            onClick={handleDiscover}
-            disabled={discover.isPending}
-          >
+          <button className="btn btn-sm btn-ghost" onClick={handleDiscover} disabled={discover.isPending}>
             <Icon name="spark" size={12} />
             {discover.isPending ? "Scanning…" : "Discover connections"}
           </button>
           <span className="dim" style={{ fontSize: 12 }}>
-            Claude scans your brain content and suggests relationships.
+            Hover a node, drag the handle to connect — or let Claude suggest.
           </span>
+          <div className="spacer" />
+          <div className="wm-legend">
+            {Object.entries(REL_COLORS).map(([label, color]) => (
+              <span key={label} className="wm-legend-item">
+                <span style={{ width: 16, height: 2, background: color, display: "inline-block", verticalAlign: "middle", borderRadius: 1 }} />
+                {label}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Suggestions panel */}
       {suggestions.length > 0 && (
         <div className="wm-suggestions">
           <div className="wm-suggestions-head">
@@ -108,14 +183,10 @@ export default function WorkspaceMap() {
               </div>
               <div className="wm-suggestion-reason">{s.reason}</div>
               <div className="wm-suggestion-actions">
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={() => handleConfirm(s, i)}
-                  disabled={confirmSuggestion.isPending}
-                >
+                <button className="btn btn-sm btn-primary" onClick={() => handleConfirmSuggestion(s, i)} disabled={confirmMut.isPending}>
                   Add connection
                 </button>
-                <button className="btn btn-sm btn-ghost" onClick={() => dismissSuggestion(i)}>
+                <button className="btn btn-sm btn-ghost" onClick={() => setSuggestions((p) => p.filter((_, j) => j !== i))}>
                   Skip
                 </button>
               </div>
@@ -124,107 +195,63 @@ export default function WorkspaceMap() {
         </div>
       )}
 
-      <div className="wm-canvas" ref={containerRef}>
-        {isLoading ? null : nodes.length === 0 ? (
+      <div className="wm-rf-container">
+        {isLoading ? null : mapData.length === 0 ? (
           <div className="wm-empty">
-            <p>No brains in your workspace yet.</p>
+            <p>No brains yet.</p>
             <Link to="/" className="btn btn-primary">← Back to brains</Link>
           </div>
         ) : (
-          <>
-            {/* relationship lines */}
-            <svg className="wm-svg">
-              <defs>
-                {Object.entries(REL_COLOR).map(([type, color]) => (
-                  <marker
-                    key={type}
-                    id={`arrow-${type.replace("-", "")}`}
-                    markerWidth="7" markerHeight="7"
-                    refX="5" refY="3"
-                    orient="auto"
-                  >
-                    <path d="M0,0 L0,6 L7,3 z" fill={color} />
-                  </marker>
-                ))}
-              </defs>
-              {allRels.map((rel) => {
-                const from = center(rel.from_slug);
-                const to = center(rel.to_slug);
-                if (!from || !to) return null;
-                const color = REL_COLOR[rel.rel_type] ?? "var(--dim)";
-                const markerId = `arrow-${rel.rel_type.replace("-", "")}`;
-                const mx = (from.x + to.x) / 2;
-                const my = (from.y + to.y) / 2;
-                return (
-                  <g key={rel.id}>
-                    <line
-                      x1={from.x} y1={from.y}
-                      x2={to.x} y2={to.y}
-                      stroke={color}
-                      strokeWidth={1.5}
-                      strokeOpacity={0.55}
-                      markerEnd={`url(#${markerId})`}
-                    />
-                    <text
-                      x={mx} y={my - 6}
-                      textAnchor="middle"
-                      fontSize={10}
-                      fill={color}
-                      fontFamily="var(--font-mono)"
-                    >
-                      {rel.rel_type}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-
-            {/* brain nodes */}
-            {nodes.map((node: WorkspaceNode, i) => {
-              const p = positions[i];
-              if (!p) return null;
-              const scoreColor = node.readiness_score >= 80
-                ? "var(--ok)"
-                : node.readiness_score >= 50
-                ? "var(--warn)"
-                : "var(--bad)";
-              return (
-                <div
-                  key={node.slug}
-                  className="wm-node"
-                  style={{ left: p.x, top: p.y }}
-                  onClick={() => navigate(`/brains/${node.slug}`)}
-                >
-                  <div className="wm-node-name">{node.name}</div>
-                  <div className="wm-node-meta">
-                    <span style={{ color: scoreColor, fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                      {node.readiness_score}
-                    </span>
-                    <span className="dim" style={{ fontSize: 11 }}>/100</span>
-                    <span
-                      className={`pill ${node.status === "ready" ? "ok" : "info"}`}
-                      style={{ fontSize: 10, padding: "1px 6px", marginLeft: 6 }}
-                    >
-                      <span className="dot" style={{ background: "currentColor" }} />
-                      {node.status === "ready" ? "Ready" : "In formation"}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* legend */}
-            <div className="wm-legend">
-              {Object.entries(REL_COLOR).map(([type, color]) => (
-                <span key={type} className="wm-legend-item">
-                  <span style={{ width: 20, height: 1.5, background: color, opacity: 0.7, display: "inline-block", verticalAlign: "middle" }} />
-                  {type}
-                </span>
-              ))}
-            </div>
-          </>
+          <ReactFlow
+            nodes={rfNodes}
+            edges={rfEdges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeDragStop={onNodeDragStop}
+            nodeTypes={nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.25 }}
+            connectionRadius={28}
+            deleteKeyCode={null}
+          >
+            <Background gap={24} size={1} color="#e8e6e0" />
+            <Controls showInteractive={false} style={{ bottom: 16, right: 16, left: "unset", top: "unset" }} />
+          </ReactFlow>
         )}
       </div>
+
+      {pending && (
+        <div className="wm-conn-overlay" onClick={(e) => e.target === e.currentTarget && setPending(null)}>
+          <div className="wm-conn-popup">
+            <div className="wm-conn-title">What type of connection?</div>
+            <div className="wm-conn-names">
+              <b>{fromName}</b>
+              <span style={{ color: "var(--dimmer)", margin: "0 8px" }}>→</span>
+              <b>{toName}</b>
+            </div>
+            <div className="wm-conn-options">
+              {Object.entries(REL_COLORS).map(([type, color]) => (
+                <button
+                  key={type}
+                  className={`wm-conn-option${connType === type ? " selected" : ""}`}
+                  style={connType === type ? { borderColor: color, color } : {}}
+                  onClick={() => setConnType(type)}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            {connError && <div style={{ color: "var(--bad)", fontSize: 12, marginBottom: 8 }}>{connError}</div>}
+            <div className="wm-conn-actions">
+              <button className="btn btn-ghost" onClick={() => setPending(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleConfirmConn} disabled={confirmMut.isPending}>
+                {confirmMut.isPending ? "Adding…" : "Add connection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
