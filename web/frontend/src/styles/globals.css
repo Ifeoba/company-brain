@@ -426,6 +426,19 @@
 .vd-hint p { font-size: 12px; color: var(--dim); line-height: 1.5; }
 .vd-hint code { font-family: var(--font-mono); background: var(--panel-2); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
 
+/* Semantic review drawer */
+.sr-empty { padding: 24px 20px; display: flex; flex-direction: column; gap: 16px; }
+.sr-empty p { font-size: 13px; color: var(--dim); line-height: 1.6; margin: 0; }
+.sr-loading { display: flex; align-items: center; gap: 12px; padding: 32px 20px; color: var(--dim); font-size: 13px; }
+.sr-summary { font-size: 13px; line-height: 1.6; color: var(--text-2); padding: 0 20px 16px; border-bottom: 1px solid var(--hairline); margin-bottom: 8px; }
+.sr-section { border-bottom: 1px solid var(--hairline); }
+.sr-section-head { width: 100%; background: none; border: none; padding: 10px 20px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; }
+.sr-section-head:hover { background: var(--panel-2); }
+.sr-count { margin-left: auto; font-size: 11px; background: var(--panel-2); border-radius: 10px; padding: 1px 7px; color: var(--dim); font-weight: 400; }
+.sr-chevron { font-size: 10px; color: var(--dimmer); }
+.sr-list { margin: 0; padding: 4px 20px 14px 36px; list-style: disc; }
+.sr-list li { font-size: 13px; color: var(--text-2); line-height: 1.55; margin-bottom: 6px; }
+
 /* ============================================================
    WORKSPACE MAP
    ============================================================ */

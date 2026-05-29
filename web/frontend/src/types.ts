@@ -154,3 +154,12 @@ export interface RelationshipSuggestion {
   rel_type: string;
   reason: string;
 }
+
+export interface SemanticReviewOut {
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  contradictions: string[];
+  suggestions: string[];
+  score: number;
+}

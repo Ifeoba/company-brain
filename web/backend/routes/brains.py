@@ -3,13 +3,16 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+import json
+
 from ..auth import current_user
 from ..db import get_db
+from ..llm_client import call_llm
 from ..models import Brain, BrainFile, InterviewState, User
 from ..readiness import STANDARD_FILES, compute_readiness
 from ..schemas import (
     BrainCreate, BrainDetail, BrainSummary, FileSummary,
-    FileContent, FileUpdate, ReadinessOut,
+    FileContent, FileUpdate, ReadinessOut, SemanticReviewOut,
 )
 
 router = APIRouter()
@@ -156,3 +159,60 @@ def update_file(slug: str, filename: str, body: FileUpdate, user: User = Depends
     db.commit()
     db.refresh(bf)
     return FileContent(filename=filename, content=bf.content, updated_at=bf.updated_at)
+
+
+_REVIEW_SYSTEM = """You are an expert knowledge-base auditor. You will receive the contents of a
+"brain" — a structured knowledge base about a service, team, or topic. Your job is to give a
+thorough semantic review: what is well-covered, what is missing, what contradicts itself, and
+what should be done next.
+
+Return ONLY valid JSON matching this shape — no prose, no markdown fences:
+{
+  "summary": "2-3 sentence overall assessment",
+  "strengths": ["...", "..."],
+  "gaps": ["...", "..."],
+  "contradictions": ["...", "..."],
+  "suggestions": ["...", "..."],
+  "score": 0-100
+}
+
+score = semantic quality (depth, clarity, consistency) — separate from file completeness.
+Keep each list item to one clear sentence. Return [] for any list with nothing to report."""
+
+
+@router.post("/api/brains/{slug}/semantic-review", response_model=SemanticReviewOut)
+def semantic_review(slug: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    brain = _get_brain(db, slug, user)
+    files = db.query(BrainFile).filter_by(brain_id=brain.id).all()
+    if not files:
+        raise HTTPException(status_code=400, detail="No content to review yet. Complete the interview first.")
+
+    sections = "\n\n".join(
+        f"=== {f.filename} ===\n{f.content}" for f in files if f.content and f.content.strip()
+    )
+    if not sections.strip():
+        raise HTTPException(status_code=400, detail="No content to review yet. Complete the interview first.")
+
+    raw = call_llm(
+        user,
+        _REVIEW_SYSTEM,
+        [{"role": "user", "content": f"Brain: {brain.name}\n\n{sections}"}],
+        max_tokens=1500,
+    )
+
+    match = __import__("re").search(r"\{.*\}", raw, __import__("re").DOTALL)
+    if not match:
+        raise HTTPException(status_code=500, detail="AI returned an unexpected response. Try again.")
+    try:
+        data = json.loads(match.group())
+    except Exception:
+        raise HTTPException(status_code=500, detail="AI returned an unexpected response. Try again.")
+
+    return SemanticReviewOut(
+        summary=data.get("summary", ""),
+        strengths=data.get("strengths", []),
+        gaps=data.get("gaps", []),
+        contradictions=data.get("contradictions", []),
+        suggestions=data.get("suggestions", []),
+        score=max(0, min(100, int(data.get("score", 0)))),
+    )

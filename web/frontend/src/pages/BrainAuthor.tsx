@@ -4,7 +4,7 @@ import {
   useAddRelationship, useBrain, useBrainRelationships, useBrainUpdates,
   useCollaborators, useDismissUpdate, useExpertQuestions, useExport,
   useGetUpdateLink, useInterview, useIntegrateUpdate, useMe, useReadiness,
-  useRemoveRelationship,
+  useRemoveRelationship, useSemanticReview,
 } from "../api/hooks";
 import { useBrains } from "../api/hooks";
 import AskExpertModal from "../components/AskExpertModal";
@@ -12,6 +12,7 @@ import Avatar from "../components/Avatar";
 import FilePreview from "../components/FilePreview";
 import Icon from "../components/Icon";
 import QuestionPane from "../components/QuestionPane";
+import SemanticReviewDrawer from "../components/SemanticReviewDrawer";
 import StepSidebar from "../components/StepSidebar";
 import ValidationDrawer from "../components/ValidationDrawer";
 
@@ -33,11 +34,15 @@ export default function BrainAuthor() {
   const addRelationship = useAddRelationship(slug!);
   const removeRelationship = useRemoveRelationship(slug!);
 
+  const semanticReview = useSemanticReview(slug!);
+
   const [activeStep, setActiveStep] = useState(1);
   const [draftContent, setDraftContent] = useState<Record<string, string>>({});
   const [askExpertModal, setAskExpertModal] = useState<{ questionText: string; questionKey: string } | null>(null);
   const [toast, setToast] = useState("");
   const [showValidation, setShowValidation] = useState(false);
+  const [showSemanticReview, setShowSemanticReview] = useState(false);
+  const [semanticReviewError, setSemanticReviewError] = useState("");
   const [showAnswers, setShowAnswers] = useState(false);
   const [showUpdates, setShowUpdates] = useState(false);
   const [showConnections, setShowConnections] = useState(false);
@@ -107,6 +112,9 @@ export default function BrainAuthor() {
           </button>
           <button className="btn btn-sm" onClick={() => setShowValidation(true)}>
             How complete?
+          </button>
+          <button className="btn btn-sm" onClick={() => setShowSemanticReview(true)}>
+            <Icon name="spark" size={11} /> AI Review
           </button>
           <button
             className="btn btn-sm"
@@ -313,6 +321,23 @@ export default function BrainAuthor() {
 
       {showValidation && readiness && (
         <ValidationDrawer readiness={readiness} onClose={() => setShowValidation(false)} />
+      )}
+
+      {showSemanticReview && (
+        <SemanticReviewDrawer
+          slug={slug!}
+          onClose={() => setShowSemanticReview(false)}
+          onRun={() => {
+            setSemanticReviewError("");
+            semanticReview.mutate(undefined, {
+              onError: (err: unknown) =>
+                setSemanticReviewError(err instanceof Error ? err.message : "Review failed. Try again."),
+            });
+          }}
+          isPending={semanticReview.isPending}
+          result={semanticReview.data ?? null}
+          error={semanticReviewError}
+        />
       )}
     </div>
   );

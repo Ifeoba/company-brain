@@ -48,11 +48,7 @@ export default function ValidationDrawer({ readiness, onClose }: Props) {
         </div>
 
         <div className="vd-hint">
-          <p>
-            For a full semantic review, load the{" "}
-            <code>company-brain-validator</code>{" "}
-            skill in Claude and run it against this brain.
-          </p>
+          <p>Use <strong>AI Review</strong> in the toolbar for a deeper look at content quality and gaps.</p>
         </div>
       </aside>
     </div>

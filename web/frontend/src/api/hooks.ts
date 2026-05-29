@@ -4,7 +4,7 @@ import type {
   BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
   Collaborator, ExpertQuestion, FileContent, FileSummary, InterviewState,
   ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
-  User, WorkspaceNode,
+  SemanticReviewOut, User, WorkspaceNode,
 } from "../types";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -92,6 +92,12 @@ export function useReadiness(slug: string) {
     queryKey: ["readiness", slug],
     queryFn: () => api(`/api/brains/${slug}/readiness`),
     enabled: !!slug,
+  });
+}
+
+export function useSemanticReview(slug: string) {
+  return useMutation<SemanticReviewOut>({
+    mutationFn: () => api(`/api/brains/${slug}/semantic-review`, { method: "POST" }),
   });
 }
 

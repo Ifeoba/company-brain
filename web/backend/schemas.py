@@ -143,6 +143,15 @@ class GenerateResponse(BaseModel):
     content: str
 
 
+class SemanticReviewOut(BaseModel):
+    summary: str
+    strengths: list[str]
+    gaps: list[str]
+    contradictions: list[str]
+    suggestions: list[str]
+    score: int
+
+
 # ── Collaborators ─────────────────────────────────────────────────────────────
 
 class CollaboratorCreate(BaseModel):
