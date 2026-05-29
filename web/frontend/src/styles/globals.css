@@ -309,6 +309,9 @@
 .bl-row { display: grid; grid-template-columns: 2fr 1fr 1.4fr 1fr 40px; gap: 18px; padding: 16px 20px; align-items: center; border-bottom: 1px solid var(--hairline); cursor: pointer; transition: background .1s; }
 .bl-row:last-child { border-bottom: 0; }
 .bl-row:hover { background: var(--panel-2); }
+.bl-delete-btn { opacity: 0; transition: opacity .15s; color: var(--dim); }
+.bl-delete-btn:hover { color: var(--bad) !important; }
+.bl-row:hover .bl-delete-btn { opacity: 1; }
 .bl-row.head { background: var(--panel-2); cursor: default; font-family: var(--font-mono); font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; }
 .bl-row.head:hover { background: var(--panel-2); }
 .bl-brain-name { font-size: 14px; color: var(--text); font-weight: 500; margin-bottom: 2px; }

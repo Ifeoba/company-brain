@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useBrains, useCreateBrain } from "../api/hooks";
+import { useBrains, useCreateBrain, useDeleteBrain } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
 import type { BrainSummary } from "../types";
@@ -56,6 +56,51 @@ function NewBrainModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+function DeleteBrainModal({ brain, onClose }: { brain: BrainSummary; onClose: () => void }) {
+  const [input, setInput] = useState("");
+  const deleteBrain = useDeleteBrain();
+
+  async function handleDelete(e: React.FormEvent) {
+    e.preventDefault();
+    if (input !== brain.name) return;
+    await deleteBrain.mutateAsync(brain.slug);
+    onClose();
+  }
+
+  return (
+    <div className="modal-scrim" onClick={onClose}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+        <h2>Delete "{brain.name}"?</h2>
+        <div className="modal-sub">
+          This will permanently delete the brain and all its content. There's no undo.
+        </div>
+        <form onSubmit={handleDelete}>
+          <div className="modal-row">
+            <span className="label">Type the brain name to confirm</span>
+            <input
+              autoFocus
+              className="input"
+              placeholder={brain.name}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+            />
+          </div>
+          <div className="footer-row">
+            <button type="button" className="btn" onClick={onClose}>Cancel</button>
+            <button
+              type="submit"
+              className="btn btn-danger"
+              disabled={input !== brain.name || deleteBrain.isPending}
+            >
+              {deleteBrain.isPending ? "Deleting…" : "Delete brain"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function statusInfo(status: BrainSummary["status"]): { cls: string; label: string } {
   if (status === "ready") return { cls: "ok", label: "Ready" };
   if (status === "stale") return { cls: "warn", label: "Needs update" };
@@ -65,6 +110,7 @@ function statusInfo(status: BrainSummary["status"]): { cls: string; label: strin
 export default function BrainsList() {
   const { data: brains = [], isLoading } = useBrains();
   const [showNew, setShowNew] = useState(false);
+  const [deletingBrain, setDeletingBrain] = useState<BrainSummary | null>(null);
   const navigate = useNavigate();
 
   return (
@@ -141,7 +187,13 @@ export default function BrainsList() {
                     <span className="dim" style={{ fontSize: 12.5 }}>
                       {new Date(b.updated_at).toLocaleDateString()}
                     </span>
-                    <Icon name="chevron_right" size={14} color="var(--dimmer)" />
+                    <button
+                      className="btn btn-sm btn-ghost bl-delete-btn"
+                      title="Delete brain"
+                      onClick={(e) => { e.stopPropagation(); setDeletingBrain(b); }}
+                    >
+                      <Icon name="trash" size={13} />
+                    </button>
                   </div>
                 );
               })}
@@ -155,6 +207,9 @@ export default function BrainsList() {
       </div>
 
       {showNew && <NewBrainModal onClose={() => setShowNew(false)} />}
+      {deletingBrain && (
+        <DeleteBrainModal brain={deletingBrain} onClose={() => setDeletingBrain(null)} />
+      )}
     </div>
   );
 }
