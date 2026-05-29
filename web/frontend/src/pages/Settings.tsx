@@ -1,27 +1,22 @@
 import { useState } from "react";
-import { useDeleteApiKey, useMe, useProviders, useSetApiKey } from "../api/hooks";
+import { useDeleteApiKey, useMe, useSetApiKey } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
 
 export default function Settings() {
   const { data: user } = useMe();
-  const { data: providers = [] } = useProviders();
   const setKey = useSetApiKey();
   const deleteKey = useDeleteApiKey();
 
-  const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
-
-  const activeProviderId = provider || user?.llm_provider || "anthropic";
-  const activeProvider = providers.find((p) => p.id === activeProviderId);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     try {
-      await setKey.mutateAsync({ provider: activeProviderId, api_key: apiKey });
+      await setKey.mutateAsync({ provider: "anthropic", api_key: apiKey });
       setApiKey("");
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -53,16 +48,12 @@ export default function Settings() {
               AI assistant
             </h3>
             <div className="desc">
-              Choose which AI powers your interviews and suggestions. Your key is stored securely and only used when you run an AI feature.
+              Add your Anthropic API key to enable AI-powered drafting and suggestions. Your key is stored securely and never shared.
             </div>
 
             {user?.has_api_key && (
               <div className="status-line" style={{ marginBottom: 12 }}>
                 <span className="ok">● connected</span>
-                {" · "}
-                <span style={{ color: "var(--dim)" }}>
-                  using {providers.find((p) => p.id === user.llm_provider)?.name ?? user.llm_provider}
-                </span>
                 {" · "}
                 <button
                   className="btn btn-sm"
@@ -77,29 +68,11 @@ export default function Settings() {
 
             <form onSubmit={handleSave}>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {providers.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      className={`wm-conn-option${activeProviderId === p.id ? " selected" : ""}`}
-                      style={activeProviderId === p.id ? { borderColor: "var(--accent)", color: "var(--accent)" } : {}}
-                      onClick={() => setProvider(p.id)}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-
                 <div className="field-row">
                   <input
                     type="password"
                     className="input key-input"
-                    placeholder={
-                      user?.has_api_key && user.llm_provider === activeProviderId
-                        ? `${activeProvider?.key_hint ?? "…"} (enter new key to replace)`
-                        : activeProvider?.key_hint ?? "Paste your API key…"
-                    }
+                    placeholder={user?.has_api_key ? "sk-ant-… (enter new key to replace)" : "sk-ant-…"}
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                   />
@@ -111,15 +84,12 @@ export default function Settings() {
                     {setKey.isPending ? "Saving…" : "Save"}
                   </button>
                 </div>
-
-                {activeProvider && (
-                  <div style={{ fontSize: 12, color: "var(--dim)" }}>
-                    Get a key at{" "}
-                    <a href={activeProvider.key_url} target="_blank" rel="noopener noreferrer">
-                      {activeProvider.key_url.replace(/^https?:\/\//, "").split("/")[0]} →
-                    </a>
-                  </div>
-                )}
+                <div style={{ fontSize: 12, color: "var(--dim)" }}>
+                  Get a key at{" "}
+                  <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">
+                    console.anthropic.com →
+                  </a>
+                </div>
               </div>
             </form>
 

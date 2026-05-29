@@ -102,19 +102,8 @@ export default function BrainAuthor() {
               {answeredQuestions.length} expert answer{answeredQuestions.length > 1 ? "s" : ""}
             </button>
           )}
-          {brainUpdates.filter((u) => u.status === "pending").length > 0 && (
-            <button className="btn btn-sm btn-ghost text-accent" onClick={() => setShowUpdates(!showUpdates)}>
-              {brainUpdates.filter((u) => u.status === "pending").length} update{brainUpdates.filter((u) => u.status === "pending").length > 1 ? "s" : ""}
-            </button>
-          )}
-          <button className="btn btn-sm btn-ghost" onClick={() => setShowConnections(!showConnections)}>
-            {relationships.length > 0 ? `${relationships.length} connection${relationships.length > 1 ? "s" : ""}` : "connections"}
-          </button>
           <button className="btn btn-sm" onClick={() => setShowValidation(true)}>
             How complete?
-          </button>
-          <button className="btn btn-sm" onClick={() => setShowSemanticReview(true)}>
-            <Icon name="spark" size={11} /> AI Review
           </button>
           <button
             className="btn btn-sm"
