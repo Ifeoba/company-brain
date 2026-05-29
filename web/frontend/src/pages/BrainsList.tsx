@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useBrains, useCreateBrain } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
@@ -86,6 +86,9 @@ export default function BrainsList() {
                 {isLoading ? "Loading…" : `${brains.length} brain${brains.length !== 1 ? "s" : ""}`}
               </div>
             </div>
+            <Link to="/map" className="btn btn-ghost btn-lg">
+              Map view
+            </Link>
             <button className="btn btn-primary btn-lg" onClick={() => setShowNew(true)}>
               <Icon name="plus" size={12} /> New brain
             </button>

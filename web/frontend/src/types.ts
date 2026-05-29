@@ -118,3 +118,22 @@ export interface PublicBrainUpdate {
   brain_name: string;
   asker_name: string;
 }
+
+export interface BrainRelationship {
+  id: string;
+  from_slug: string;
+  from_name: string;
+  to_slug: string;
+  to_name: string;
+  rel_type: string;
+  created_at: string;
+}
+
+export interface WorkspaceNode {
+  id: string;
+  slug: string;
+  name: string;
+  readiness_score: number;
+  status: string;
+  relationships: BrainRelationship[];
+}

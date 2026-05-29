@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "./client";
 import type {
-  BrainDetail, BrainSummary, BrainUpdate, BrainUpdateLink, Collaborator,
-  ExpertQuestion, FileContent, FileSummary, InterviewState, PublicBrainUpdate,
-  PublicQuestion, ReadinessOut, User,
+  BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
+  Collaborator, ExpertQuestion, FileContent, FileSummary, InterviewState,
+  PublicBrainUpdate, PublicQuestion, ReadinessOut, User, WorkspaceNode,
 } from "../types";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -307,6 +307,50 @@ export function useSubmitBrainUpdate(token: string) {
         method: "POST",
         body: JSON.stringify(body),
       }),
+  });
+}
+
+// ── Knowledge graph (brain relationships) ────────────────────────────────────
+
+export function useWorkspaceMap() {
+  return useQuery<WorkspaceNode[]>({
+    queryKey: ["workspace-map"],
+    queryFn: () => api("/api/workspace/map"),
+  });
+}
+
+export function useBrainRelationships(slug: string) {
+  return useQuery<BrainRelationship[]>({
+    queryKey: ["relationships", slug],
+    queryFn: () => api(`/api/brains/${slug}/relationships`),
+    enabled: !!slug,
+  });
+}
+
+export function useAddRelationship(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { to_slug: string; rel_type: string }) =>
+      api<BrainRelationship>(`/api/brains/${slug}/relationships`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["relationships", slug] });
+      qc.invalidateQueries({ queryKey: ["workspace-map"] });
+    },
+  });
+}
+
+export function useRemoveRelationship(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rel_id: string) =>
+      api(`/api/brains/${slug}/relationships/${rel_id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["relationships", slug] });
+      qc.invalidateQueries({ queryKey: ["workspace-map"] });
+    },
   });
 }
 

@@ -230,3 +230,29 @@ class SubmitUpdateRequest(BaseModel):
     contributor_email: str = ""
     topic: str = ""
     content: str
+
+
+# ── Knowledge graph (brain relationships) ─────────────────────────────────────
+
+class BrainRelationshipCreate(BaseModel):
+    to_slug: str
+    rel_type: str
+
+
+class BrainRelationshipOut(BaseModel):
+    id: str
+    from_slug: str
+    from_name: str
+    to_slug: str
+    to_name: str
+    rel_type: str
+    created_at: datetime
+
+
+class WorkspaceNodeOut(BaseModel):
+    id: str
+    slug: str
+    name: str
+    readiness_score: int
+    status: str
+    relationships: list[BrainRelationshipOut]

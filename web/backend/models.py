@@ -149,3 +149,18 @@ class BrainUpdate(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     link = relationship("BrainUpdateLink", back_populates="updates")
+
+
+class BrainRelationship(Base):
+    __tablename__ = "brain_relationships"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    from_brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    to_brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    rel_type = Column(String(32), nullable=False)  # depends-on | uses | related-to | feeds-into
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("from_brain_id", "to_brain_id", "rel_type", name="uq_brain_rel"),)
+
+    from_brain = relationship("Brain", foreign_keys=[from_brain_id])
+    to_brain = relationship("Brain", foreign_keys=[to_brain_id])

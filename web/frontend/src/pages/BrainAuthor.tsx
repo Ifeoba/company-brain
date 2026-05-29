@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  useBrain, useBrainUpdates, useCollaborators, useDismissUpdate,
-  useExpertQuestions, useExport, useGetUpdateLink, useInterview,
-  useIntegrateUpdate, useMe, useReadiness,
+  useAddRelationship, useBrain, useBrainRelationships, useBrainUpdates,
+  useCollaborators, useDismissUpdate, useExpertQuestions, useExport,
+  useGetUpdateLink, useInterview, useIntegrateUpdate, useMe, useReadiness,
+  useRemoveRelationship,
 } from "../api/hooks";
+import { useBrains } from "../api/hooks";
 import AskExpertModal from "../components/AskExpertModal";
 import Avatar from "../components/Avatar";
 import FilePreview from "../components/FilePreview";
@@ -21,11 +23,15 @@ export default function BrainAuthor() {
   const { data: collaborators = [] } = useCollaborators(slug!);
   const { data: expertQuestions = [] } = useExpertQuestions(slug!);
   const { data: brainUpdates = [] } = useBrainUpdates(slug!);
+  const { data: relationships = [] } = useBrainRelationships(slug!);
+  const { data: allBrains = [] } = useBrains();
   const { data: user } = useMe();
   const exportBrain = useExport(slug!);
   const getUpdateLink = useGetUpdateLink(slug!);
   const integrateUpdate = useIntegrateUpdate(slug!);
   const dismissUpdate = useDismissUpdate(slug!);
+  const addRelationship = useAddRelationship(slug!);
+  const removeRelationship = useRemoveRelationship(slug!);
 
   const [activeStep, setActiveStep] = useState(1);
   const [draftContent, setDraftContent] = useState<Record<string, string>>({});
@@ -34,6 +40,9 @@ export default function BrainAuthor() {
   const [showValidation, setShowValidation] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);
   const [showUpdates, setShowUpdates] = useState(false);
+  const [showConnections, setShowConnections] = useState(false);
+  const [newRelTarget, setNewRelTarget] = useState("");
+  const [newRelType, setNewRelType] = useState("depends-on");
 
   if (!brain || !interview) {
     return (
@@ -93,6 +102,9 @@ export default function BrainAuthor() {
               {brainUpdates.filter((u) => u.status === "pending").length} update{brainUpdates.filter((u) => u.status === "pending").length > 1 ? "s" : ""}
             </button>
           )}
+          <button className="btn btn-sm btn-ghost" onClick={() => setShowConnections(!showConnections)}>
+            {relationships.length > 0 ? `${relationships.length} connection${relationships.length > 1 ? "s" : ""}` : "connections"}
+          </button>
           <button className="btn btn-sm" onClick={() => setShowValidation(true)}>
             Readiness check
           </button>
@@ -110,6 +122,79 @@ export default function BrainAuthor() {
         {/* Content */}
         <div className="ba-content">
           <div className="ba-section">
+            {/* Connected brains panel */}
+            {showConnections && (
+              <div className="ba-expert-panel">
+                <div className="ba-expert-panel-head">
+                  <span>Connected brains</span>
+                  <button onClick={() => setShowConnections(false)}>×</button>
+                </div>
+                {relationships.length === 0 && (
+                  <div style={{ padding: "14px 16px", color: "var(--dim)", fontSize: 13 }}>
+                    No connections yet. Connect this brain to show how services relate on the workspace map.
+                  </div>
+                )}
+                {relationships.map((rel) => (
+                  <div key={rel.id} className="ba-expert-item">
+                    <div className="ba-expert-item-meta">
+                      <span style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>{rel.rel_type}</span>
+                      {" → "}
+                      <b>{rel.to_name}</b>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                      <Link to={`/brains/${rel.to_slug}`} className="btn btn-sm btn-ghost">
+                        Open
+                      </Link>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => removeRelationship.mutate(rel.id)}
+                        disabled={removeRelationship.isPending}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ padding: "12px 16px", borderTop: "1px solid var(--hairline)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <select
+                    className="input"
+                    style={{ fontSize: 12, padding: "4px 8px", flex: 1, minWidth: 120 }}
+                    value={newRelTarget}
+                    onChange={(e) => setNewRelTarget(e.target.value)}
+                  >
+                    <option value="">Select brain…</option>
+                    {allBrains.filter((b) => b.slug !== slug).map((b) => (
+                      <option key={b.slug} value={b.slug}>{b.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="input"
+                    style={{ fontSize: 12, padding: "4px 8px" }}
+                    value={newRelType}
+                    onChange={(e) => setNewRelType(e.target.value)}
+                  >
+                    <option value="depends-on">depends-on</option>
+                    <option value="uses">uses</option>
+                    <option value="related-to">related-to</option>
+                    <option value="feeds-into">feeds-into</option>
+                  </select>
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={() => {
+                      if (!newRelTarget) return;
+                      addRelationship.mutate(
+                        { to_slug: newRelTarget, rel_type: newRelType },
+                        { onSuccess: () => setNewRelTarget("") },
+                      );
+                    }}
+                    disabled={!newRelTarget || addRelationship.isPending}
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Knowledge updates panel */}
             {showUpdates && (
               <div className="ba-expert-panel">
