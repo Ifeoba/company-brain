@@ -1,43 +1,115 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import CytoscapeComponent from "react-cytoscapejs";
+import cytoscape from "cytoscape";
 import { useConfirmSuggestion, useDiscoverRelationships, useWorkspaceMap } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
-import type { RelationshipSuggestion, WorkspaceNode } from "../types";
+import type { RelationshipSuggestion } from "../types";
 
-const NW = 164;
-const NH = 76;
-
-function circularPositions(count: number, w: number, h: number) {
-  const cx = w / 2, cy = h / 2;
-  if (count === 0) return [];
-  if (count === 1) return [{ x: cx - NW / 2, y: cy - NH / 2 }];
-  const r = Math.min(cx * 0.68, cy * 0.68);
-  return Array.from({ length: count }, (_, i) => {
-    const angle = (2 * Math.PI * i / count) - Math.PI / 2;
-    return { x: cx + r * Math.cos(angle) - NW / 2, y: cy + r * Math.sin(angle) - NH / 2 };
-  });
-}
-
-const REL_COLOR: Record<string, string> = {
-  "depends-on": "var(--bad)",
-  "uses": "var(--info)",
-  "related-to": "var(--dim)",
-  "feeds-into": "var(--drift)",
+const LAYOUT = {
+  name: "cose",
+  animate: true,
+  animationDuration: 500,
+  fit: true,
+  padding: 60,
+  nodeRepulsion: 8000,
+  idealEdgeLength: 180,
+  edgeElasticity: 0.45,
+  gravity: 0.3,
+  numIter: 1000,
+  randomize: false,
 };
+
+const STYLESHEET = [
+  {
+    selector: "node",
+    style: {
+      "background-color": "#ffffff",
+      "border-width": 2,
+      "border-color": "#e8e6e0",
+      "label": "data(label)",
+      "font-family": "Inter, -apple-system, sans-serif",
+      "font-size": "12px",
+      "font-weight": "500",
+      "color": "#1a1a1a",
+      "text-valign": "center",
+      "text-halign": "center",
+      "width": 150,
+      "height": 62,
+      "shape": "roundrectangle",
+      "text-wrap": "wrap",
+      "text-max-width": "130px",
+      "cursor": "pointer",
+    },
+  },
+  {
+    selector: "node[status = 'ready']",
+    style: {
+      "border-color": "#2d8a4e",
+      "border-width": 2.5,
+    },
+  },
+  {
+    selector: "node:hover",
+    style: {
+      "background-color": "#f7f6f2",
+      "border-color": "#2d8a4e",
+      "border-width": 2.5,
+    },
+  },
+  {
+    selector: "node:selected",
+    style: {
+      "background-color": "#f0faf1",
+      "border-color": "#2d8a4e",
+      "border-width": 3,
+    },
+  },
+  {
+    selector: "edge",
+    style: {
+      "width": 1.5,
+      "line-color": "#c0bfba",
+      "target-arrow-color": "#c0bfba",
+      "target-arrow-shape": "triangle",
+      "curve-style": "bezier",
+      "label": "data(rel_type)",
+      "font-size": "10px",
+      "font-family": "IBM Plex Mono, monospace",
+      "color": "#9a9a96",
+      "text-rotation": "autorotate",
+      "text-margin-y": -8,
+      "text-background-color": "#fafaf8",
+      "text-background-opacity": 0.85,
+      "text-background-padding": "2px",
+    },
+  },
+  {
+    selector: "edge[rel_type = 'depends-on']",
+    style: { "line-color": "#c93030", "target-arrow-color": "#c93030", "color": "#c93030" },
+  },
+  {
+    selector: "edge[rel_type = 'uses']",
+    style: { "line-color": "#2563d9", "target-arrow-color": "#2563d9", "color": "#2563d9" },
+  },
+  {
+    selector: "edge[rel_type = 'feeds-into']",
+    style: { "line-color": "#7c47d6", "target-arrow-color": "#7c47d6", "color": "#7c47d6" },
+  },
+];
 
 export default function WorkspaceMap() {
   const { data: nodes = [], isLoading } = useWorkspaceMap();
   const discover = useDiscoverRelationships();
   const confirmSuggestion = useConfirmSuggestion();
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [positions, setPositions] = useState<Array<{ x: number; y: number }>>([]);
   const [suggestions, setSuggestions] = useState<RelationshipSuggestion[]>([]);
   const navigate = useNavigate();
 
   async function handleDiscover() {
     const found = await discover.mutateAsync();
-    setSuggestions(found);
+    setSuggestions(found.length ? found : []);
+    if (!found.length) alert("No new relationships found — add more content to your brains first.");
   }
 
   function dismissSuggestion(idx: number) {
@@ -45,37 +117,38 @@ export default function WorkspaceMap() {
   }
 
   async function handleConfirm(s: RelationshipSuggestion, idx: number) {
-    await confirmSuggestion.mutateAsync({ from_slug: s.from_slug, to_slug: s.to_slug, rel_type: s.rel_type });
+    await confirmSuggestion.mutateAsync({
+      from_slug: s.from_slug,
+      to_slug: s.to_slug,
+      rel_type: s.rel_type,
+    });
     dismissSuggestion(idx);
   }
 
-  useLayoutEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const calc = () => {
-      const { width, height } = el.getBoundingClientRect();
-      setPositions(circularPositions(nodes.length, width, height));
-    };
-    calc();
-    const obs = new ResizeObserver(calc);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [nodes.length]);
-
-  const slugToIdx = Object.fromEntries(nodes.map((n, i) => [n.slug, i]));
-  const allRels = nodes.flatMap((n) => n.relationships);
-
-  function center(slug: string) {
-    const p = positions[slugToIdx[slug]];
-    if (!p) return null;
-    return { x: p.x + NW / 2, y: p.y + NH / 2 };
-  }
+  const elements = [
+    ...nodes.map((n) => ({
+      data: {
+        id: n.slug,
+        label: `${n.name}\n${n.readiness_score}/100`,
+        status: n.status,
+      },
+    })),
+    ...nodes.flatMap((n) =>
+      n.relationships.map((r) => ({
+        data: {
+          id: r.id,
+          source: r.from_slug,
+          target: r.to_slug,
+          rel_type: r.rel_type,
+        },
+      }))
+    ),
+  ];
 
   return (
     <div className="bl-shell">
       <AppTopbar />
 
-      {/* Discovery toolbar */}
       {!isLoading && nodes.length >= 2 && (
         <div className="wm-toolbar">
           <button
@@ -87,17 +160,34 @@ export default function WorkspaceMap() {
             {discover.isPending ? "Scanning…" : "Discover connections"}
           </button>
           <span className="dim" style={{ fontSize: 12 }}>
-            Claude scans your brain content and suggests relationships.
+            Claude reads your brain content and suggests how they relate.
           </span>
+          <div className="spacer" />
+          <div className="wm-legend">
+            {[
+              { label: "depends-on", color: "#c93030" },
+              { label: "uses", color: "#2563d9" },
+              { label: "feeds-into", color: "#7c47d6" },
+              { label: "related-to", color: "#9a9a96" },
+            ].map(({ label, color }) => (
+              <span key={label} className="wm-legend-item">
+                <span style={{ width: 18, height: 2, background: color, display: "inline-block", verticalAlign: "middle", borderRadius: 1 }} />
+                {label}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Suggestions panel */}
       {suggestions.length > 0 && (
         <div className="wm-suggestions">
           <div className="wm-suggestions-head">
-            <span>{suggestions.length} suggested connection{suggestions.length > 1 ? "s" : ""}</span>
-            <button className="btn btn-ghost btn-sm" onClick={() => setSuggestions([])}>Clear all</button>
+            <span>
+              {suggestions.length} suggested connection{suggestions.length > 1 ? "s" : ""}
+            </span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSuggestions([])}>
+              Clear all
+            </button>
           </div>
           {suggestions.map((s, i) => (
             <div key={i} className="wm-suggestion-item">
@@ -124,105 +214,33 @@ export default function WorkspaceMap() {
         </div>
       )}
 
-      <div className="wm-canvas" ref={containerRef}>
+      <div className="wm-cyto-container">
         {isLoading ? null : nodes.length === 0 ? (
           <div className="wm-empty">
-            <p>No brains in your workspace yet.</p>
+            <p>No brains yet.</p>
             <Link to="/" className="btn btn-primary">← Back to brains</Link>
           </div>
         ) : (
-          <>
-            {/* relationship lines */}
-            <svg className="wm-svg">
-              <defs>
-                {Object.entries(REL_COLOR).map(([type, color]) => (
-                  <marker
-                    key={type}
-                    id={`arrow-${type.replace("-", "")}`}
-                    markerWidth="7" markerHeight="7"
-                    refX="5" refY="3"
-                    orient="auto"
-                  >
-                    <path d="M0,0 L0,6 L7,3 z" fill={color} />
-                  </marker>
-                ))}
-              </defs>
-              {allRels.map((rel) => {
-                const from = center(rel.from_slug);
-                const to = center(rel.to_slug);
-                if (!from || !to) return null;
-                const color = REL_COLOR[rel.rel_type] ?? "var(--dim)";
-                const markerId = `arrow-${rel.rel_type.replace("-", "")}`;
-                const mx = (from.x + to.x) / 2;
-                const my = (from.y + to.y) / 2;
-                return (
-                  <g key={rel.id}>
-                    <line
-                      x1={from.x} y1={from.y}
-                      x2={to.x} y2={to.y}
-                      stroke={color}
-                      strokeWidth={1.5}
-                      strokeOpacity={0.55}
-                      markerEnd={`url(#${markerId})`}
-                    />
-                    <text
-                      x={mx} y={my - 6}
-                      textAnchor="middle"
-                      fontSize={10}
-                      fill={color}
-                      fontFamily="var(--font-mono)"
-                    >
-                      {rel.rel_type}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-
-            {/* brain nodes */}
-            {nodes.map((node: WorkspaceNode, i) => {
-              const p = positions[i];
-              if (!p) return null;
-              const scoreColor = node.readiness_score >= 80
-                ? "var(--ok)"
-                : node.readiness_score >= 50
-                ? "var(--warn)"
-                : "var(--bad)";
-              return (
-                <div
-                  key={node.slug}
-                  className="wm-node"
-                  style={{ left: p.x, top: p.y }}
-                  onClick={() => navigate(`/brains/${node.slug}`)}
-                >
-                  <div className="wm-node-name">{node.name}</div>
-                  <div className="wm-node-meta">
-                    <span style={{ color: scoreColor, fontFamily: "var(--font-mono)", fontSize: 11 }}>
-                      {node.readiness_score}
-                    </span>
-                    <span className="dim" style={{ fontSize: 11 }}>/100</span>
-                    <span
-                      className={`pill ${node.status === "ready" ? "ok" : "info"}`}
-                      style={{ fontSize: 10, padding: "1px 6px", marginLeft: 6 }}
-                    >
-                      <span className="dot" style={{ background: "currentColor" }} />
-                      {node.status === "ready" ? "Ready" : "In formation"}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-
-            {/* legend */}
-            <div className="wm-legend">
-              {Object.entries(REL_COLOR).map(([type, color]) => (
-                <span key={type} className="wm-legend-item">
-                  <span style={{ width: 20, height: 1.5, background: color, opacity: 0.7, display: "inline-block", verticalAlign: "middle" }} />
-                  {type}
-                </span>
-              ))}
-            </div>
-          </>
+          <CytoscapeComponent
+            key={elements.length}
+            elements={elements}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            stylesheet={STYLESHEET as any}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            layout={LAYOUT as any}
+            style={{ width: "100%", height: "100%" }}
+            cy={(cy: cytoscape.Core) => {
+              cy.on("tap", "node", (evt: cytoscape.EventObject) => {
+                navigate(`/brains/${evt.target.id()}`);
+              });
+              cy.on("mouseover", "node", () => {
+                (cy.container() as HTMLElement).style.cursor = "pointer";
+              });
+              cy.on("mouseout", "node", () => {
+                (cy.container() as HTMLElement).style.cursor = "default";
+              });
+            }}
+          />
         )}
       </div>
     </div>
