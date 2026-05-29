@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import ReactFlow, {
-  Background, Controls, Handle, MarkerType,
-  Position, useEdgesState, useNodesState,
+  Background, Controls, EdgeLabelRenderer, Handle, MarkerType,
+  Position, useEdgesState, useNodesState, useReactFlow,
 } from "reactflow";
-import type { Connection, Edge, EdgeMouseHandler, NodeProps } from "reactflow";
+import type { Connection, Edge, EdgeMouseHandler, EdgeProps, NodeProps } from "reactflow";
 import "reactflow/dist/style.css";
 import { useConfirmSuggestion, useDiscoverRelationships, useRemoveRelationship, useWorkspaceMap } from "../api/hooks";
 import AppTopbar from "../components/Layout";
@@ -24,11 +24,86 @@ function edgeStyle(relType: string) {
     style: { stroke: color, strokeWidth: 1.5 },
     markerEnd: { type: MarkerType.ArrowClosed, color },
     label: relType,
-    labelStyle: { fill: color, fontSize: 10, fontFamily: "IBM Plex Mono, monospace" },
-    labelBgStyle: { fill: "#fafaf8", fillOpacity: 0.9 },
-    labelBgPadding: [4, 3] as [number, number],
-    labelBgBorderRadius: 3,
   };
+}
+
+function AdjustableEdge({ id, sourceX, sourceY, targetX, targetY, style, markerEnd, label, data, selected }: EdgeProps) {
+  const { screenToFlowPosition, setEdges } = useReactFlow();
+  const [hovered, setHovered] = useState(false);
+
+  const bx: number = data?.bendX ?? (sourceX + targetX) / 2;
+  const by: number = data?.bendY ?? (sourceY + targetY) / 2;
+  // Control point so the quadratic bezier actually passes through (bx, by) at t=0.5
+  const cx = 2 * bx - 0.5 * sourceX - 0.5 * targetX;
+  const cy = 2 * by - 0.5 * sourceY - 0.5 * targetY;
+  const edgePath = `M${sourceX},${sourceY} Q${cx},${cy} ${targetX},${targetY}`;
+  const strokeColor = (style as React.CSSProperties | undefined)?.stroke ?? "#c0bfba";
+  const showHandle = selected || hovered;
+
+  const onBendMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const move = (me: MouseEvent) => {
+      const pos = screenToFlowPosition({ x: me.clientX, y: me.clientY });
+      setEdges((eds) => eds.map((ed) =>
+        ed.id === id ? { ...ed, data: { ...ed.data, bendX: pos.x, bendY: pos.y } } : ed
+      ));
+    };
+    const up = () => {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", up);
+    };
+    document.addEventListener("mousemove", move);
+    document.addEventListener("mouseup", up);
+  };
+
+  return (
+    <>
+      <path
+        d={edgePath}
+        className="react-flow__edge-path"
+        style={style}
+        markerEnd={markerEnd as string}
+        fill="none"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
+      {/* wider invisible hit area */}
+      <path
+        d={edgePath}
+        fill="none"
+        stroke="transparent"
+        strokeWidth={20}
+        className="react-flow__edge-interaction"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      />
+      <EdgeLabelRenderer>
+        <div
+          className="nodrag nopan"
+          style={{
+            position: "absolute",
+            transform: `translate(-50%, -50%) translate(${bx}px, ${by - 16}px)`,
+            pointerEvents: "none",
+            fontSize: 10,
+            fontFamily: "IBM Plex Mono, monospace",
+            color: strokeColor,
+            background: "rgba(250,250,248,0.9)",
+            padding: "1px 5px",
+            borderRadius: 3,
+          }}
+        >
+          {label as React.ReactNode}
+        </div>
+        {showHandle && (
+          <div
+            className="nodrag nopan wm-edge-bend"
+            style={{ position: "absolute", transform: `translate(-50%, -50%) translate(${bx}px, ${by}px)` }}
+            onMouseDown={onBendMouseDown}
+          />
+        )}
+      </EdgeLabelRenderer>
+    </>
+  );
 }
 
 function BrainNode({ data }: NodeProps) {
@@ -49,6 +124,7 @@ function BrainNode({ data }: NodeProps) {
 }
 
 const nodeTypes = { brainNode: BrainNode };
+const edgeTypes = { adjustable: AdjustableEdge };
 
 function loadPositions(): Record<string, { x: number; y: number }> {
   try { return JSON.parse(localStorage.getItem("wm-positions") ?? "{}"); }
@@ -97,17 +173,20 @@ export default function WorkspaceMap() {
         data: { name: n.name, score: n.readiness_score, status: n.status },
       }));
     });
-    setRfEdges(
-      mapData.flatMap((n) =>
+    setRfEdges((prev) => {
+      // Preserve any bend points the user has dragged
+      const bendMap = Object.fromEntries(prev.map((e) => [e.id, { bendX: e.data?.bendX, bendY: e.data?.bendY }]));
+      return mapData.flatMap((n) =>
         n.relationships.map((r) => ({
           id: r.id,
           source: r.from_slug,
           target: r.to_slug,
-          data: { relType: r.rel_type },
+          type: "adjustable",
+          data: { relType: r.rel_type, ...bendMap[r.id] },
           ...edgeStyle(r.rel_type),
         }))
-      )
-    );
+      );
+    });
   }, [mapData]);
 
   const onNodeDragStop = useCallback((_: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
@@ -191,7 +270,7 @@ export default function WorkspaceMap() {
             {discover.isPending ? "Scanning…" : "Discover connections"}
           </button>
           <span className="dim" style={{ fontSize: 12 }}>
-            Hover a node, drag the handle to connect — or let Claude suggest.
+            Hover a node to connect · hover a line to bend it · click a line to edit.
           </span>
           <div className="spacer" />
           <div className="wm-legend">
@@ -248,6 +327,7 @@ export default function WorkspaceMap() {
             onEdgeClick={onEdgeClick}
             onNodeDragStop={onNodeDragStop}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             fitView
             fitViewOptions={{ padding: 0.25 }}
             connectionRadius={28}

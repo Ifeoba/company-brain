@@ -462,6 +462,9 @@
 .wm-conn-option:hover { border-color: var(--border-2); }
 .wm-conn-option.selected { font-weight: 600; background: color-mix(in srgb, currentColor 8%, transparent); }
 .wm-conn-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.wm-edge-bend { width: 10px; height: 10px; background: var(--panel); border: 2px solid var(--accent); border-radius: 50%; cursor: grab; pointer-events: all; }
+.wm-edge-bend:hover { background: var(--accent); }
+.wm-edge-bend:active { cursor: grabbing; }
 .btn-danger { color: var(--bad) !important; }
 .btn-danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent) !important; }
 
