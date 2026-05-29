@@ -1,22 +1,27 @@
 import { useState } from "react";
-import { useDeleteApiKey, useMe, useSetApiKey } from "../api/hooks";
+import { useDeleteApiKey, useMe, useProviders, useSetApiKey } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
 
 export default function Settings() {
   const { data: user } = useMe();
+  const { data: providers = [] } = useProviders();
   const setKey = useSetApiKey();
   const deleteKey = useDeleteApiKey();
 
+  const [provider, setProvider] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+
+  const activeProviderId = provider || user?.llm_provider || "anthropic";
+  const activeProvider = providers.find((p) => p.id === activeProviderId);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     try {
-      await setKey.mutateAsync(apiKey);
+      await setKey.mutateAsync({ provider: activeProviderId, api_key: apiKey });
       setApiKey("");
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -26,7 +31,7 @@ export default function Settings() {
   }
 
   async function handleDelete() {
-    if (!confirm("Remove your Anthropic API key?")) return;
+    if (!confirm("Remove your API key?")) return;
     await deleteKey.mutateAsync();
   }
 
@@ -45,25 +50,26 @@ export default function Settings() {
           <div className="settings-section">
             <h3>
               <Icon name="key" size={14} />
-              Anthropic API key
+              AI provider
             </h3>
             <div className="desc">
-              Required to run the interview. Your key is encrypted at rest and used only to draft
-              files from your answers.{" "}
-              <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">
-                How to get one →
-              </a>
+              Choose which AI model powers your interviews and insights. Your key is
+              encrypted at rest and never leaves your server.
             </div>
 
-            {user?.has_anthropic_key && (
+            {user?.has_api_key && (
               <div className="status-line" style={{ marginBottom: 12 }}>
                 <span className="ok">● connected</span>
                 {" · "}
+                <span style={{ color: "var(--dim)" }}>
+                  using {providers.find((p) => p.id === user.llm_provider)?.name ?? user.llm_provider}
+                </span>
+                {" · "}
                 <button
-                  className="btn btn-sm btn-danger"
+                  className="btn btn-sm"
                   onClick={handleDelete}
                   disabled={deleteKey.isPending}
-                  style={{ display: "inline", padding: 0, border: "none", background: "none", fontSize: "inherit" }}
+                  style={{ display: "inline", padding: 0, border: "none", background: "none", fontSize: "inherit", color: "var(--bad)", cursor: "pointer" }}
                 >
                   {deleteKey.isPending ? "Removing…" : "Remove key"}
                 </button>
@@ -71,21 +77,50 @@ export default function Settings() {
             )}
 
             <form onSubmit={handleSave}>
-              <div className="field-row">
-                <input
-                  type="password"
-                  className="input key-input"
-                  placeholder={user?.has_anthropic_key ? "sk-ant-… (enter new key to replace)" : "sk-ant-…"}
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={setKey.isPending || !apiKey}
-                >
-                  {setKey.isPending ? "Saving…" : "Save"}
-                </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {providers.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className={`wm-conn-option${activeProviderId === p.id ? " selected" : ""}`}
+                      style={activeProviderId === p.id ? { borderColor: "var(--accent)", color: "var(--accent)" } : {}}
+                      onClick={() => setProvider(p.id)}
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="field-row">
+                  <input
+                    type="password"
+                    className="input key-input"
+                    placeholder={
+                      user?.has_api_key && user.llm_provider === activeProviderId
+                        ? `${activeProvider?.key_hint ?? "…"} (enter new key to replace)`
+                        : activeProvider?.key_hint ?? "Paste your API key…"
+                    }
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={setKey.isPending || !apiKey}
+                  >
+                    {setKey.isPending ? "Saving…" : "Save"}
+                  </button>
+                </div>
+
+                {activeProvider && (
+                  <div style={{ fontSize: 12, color: "var(--dim)" }}>
+                    Get a key at{" "}
+                    <a href={activeProvider.key_url} target="_blank" rel="noopener noreferrer">
+                      {activeProvider.key_url.replace(/^https?:\/\//, "").split("/")[0]} →
+                    </a>
+                  </div>
+                )}
               </div>
             </form>
 

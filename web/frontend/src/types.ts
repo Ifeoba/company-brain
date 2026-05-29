@@ -3,8 +3,16 @@ export interface User {
   github_username: string;
   email: string;
   avatar_url: string;
-  has_anthropic_key: boolean;
+  has_api_key: boolean;
+  llm_provider: string;
   created_at: string;
+}
+
+export interface ProviderInfo {
+  id: string;
+  name: string;
+  key_hint: string;
+  key_url: string;
 }
 
 export interface BrainSummary {

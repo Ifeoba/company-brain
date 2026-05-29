@@ -16,6 +16,7 @@ dependencies = [
     "resend>=0.7",
     "cryptography>=42",
     "anthropic>=0.40",
+    "openai>=1.0",
     "python-multipart>=0.0.9",
     "itsdangerous>=2.1",
 ]

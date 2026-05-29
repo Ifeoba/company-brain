@@ -6,9 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
-from ..claude_client import get_client
-from ..config import settings
 from ..db import get_db
+from ..llm_client import call_llm
 from ..models import Brain, BrainFile, InterviewState, User
 from ..schemas import (
     AnswerRequest, GenerateRequest, GenerateResponse,
@@ -129,17 +128,14 @@ def generate(slug: str, body: GenerateRequest, user: User = Depends(current_user
     if not answers_text:
         raise HTTPException(status_code=400, detail="No answers saved for this step yet. Answer the questions first.")
 
-    client = get_client(user.encrypted_anthropic_key)
     json_mode = body.filename.endswith(".json")
     system = _SYSTEM_PROMPT_JSON if json_mode else _SYSTEM_PROMPT
-
-    response = client.messages.create(
-        model=settings.claude_model,
+    content = call_llm(
+        user,
+        system,
+        [{"role": "user", "content": f"Template for {body.filename}:\n\n{template}\n\n---\nUser's answers:\n\n{answers_text}"}],
         max_tokens=4096,
-        system=system,
-        messages=[{"role": "user", "content": f"Template for {body.filename}:\n\n{template}\n\n---\nUser's answers:\n\n{answers_text}"}],
     )
-    content = response.content[0].text
 
     now = datetime.utcnow()
     bf = db.query(BrainFile).filter_by(brain_id=brain.id, filename=body.filename).first()

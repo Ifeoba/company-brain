@@ -9,9 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
-from ..claude_client import get_client
-from ..config import settings
 from ..db import get_db
+from ..llm_client import call_llm
 from ..models import Brain, BrainFile, BrainUpdate, BrainUpdateLink, User
 from ..schemas import (
     BrainUpdateLinkOut, BrainUpdateOut, PublicBrainUpdateOut, SubmitUpdateRequest,
@@ -86,13 +85,10 @@ def integrate_update(
         f"- {f.filename}: {f.content[:300]}{'…' if len(f.content) > 300 else ''}"
         for f in files
     )
-    client = get_client(user.encrypted_anthropic_key)
-
-    selection_resp = client.messages.create(
-        model=settings.claude_model,
-        max_tokens=256,
-        system="You select which brain knowledge-base files should be updated with new information. Respond with ONLY a JSON array of filename strings, e.g. [\"overview.md\"].",
-        messages=[{
+    raw = call_llm(
+        user,
+        "You select which brain knowledge-base files should be updated with new information. Respond with ONLY a JSON array of filename strings, e.g. [\"overview.md\"].",
+        [{
             "role": "user",
             "content": (
                 f"New knowledge update:\n"
@@ -102,8 +98,8 @@ def integrate_update(
                 f"Which filenames should be updated?"
             ),
         }],
+        max_tokens=256,
     )
-    raw = selection_resp.content[0].text
     match = re.search(r"\[.*?\]", raw, re.DOTALL)
     try:
         target_names = json.loads(match.group()) if match else []
@@ -117,14 +113,13 @@ def integrate_update(
     for bf in files:
         if bf.filename not in target_names:
             continue
-        integrate_resp = client.messages.create(
-            model=settings.claude_model,
-            max_tokens=4096,
-            system=(
+        bf.content = call_llm(
+            user,
+            (
                 "You update a knowledge-base file to naturally incorporate new domain expert knowledge. "
                 "Return ONLY the updated file content — no commentary, no fences."
             ),
-            messages=[{
+            [{
                 "role": "user",
                 "content": (
                     f"Current content of {bf.filename}:\n\n{bf.content}\n\n"
@@ -135,8 +130,8 @@ def integrate_update(
                     f"Return the updated file content."
                 ),
             }],
+            max_tokens=4096,
         )
-        bf.content = integrate_resp.content[0].text
         bf.updated_at = now
         updated.append(bf.filename)
 

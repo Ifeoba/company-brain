@@ -24,6 +24,7 @@ class User(Base):
     email = Column(String(256), nullable=False)
     avatar_url = Column(String(512), default="")
     encrypted_anthropic_key = Column(LargeBinary, nullable=True)
+    llm_provider = Column(String(32), default="anthropic", server_default="anthropic")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     brains = relationship("Brain", back_populates="owner", cascade="all, delete-orphan")

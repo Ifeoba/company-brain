@@ -12,7 +12,8 @@ class UserOut(BaseModel):
     github_username: str
     email: str
     avatar_url: str
-    has_anthropic_key: bool
+    has_api_key: bool
+    llm_provider: str
     created_at: datetime
 
     class Config:
@@ -20,7 +21,15 @@ class UserOut(BaseModel):
 
 
 class SetApiKeyRequest(BaseModel):
+    provider: str
     api_key: str
+
+
+class ProviderInfo(BaseModel):
+    id: str
+    name: str
+    key_hint: str
+    key_url: str
 
 
 # ── Brains ────────────────────────────────────────────────────────────────────

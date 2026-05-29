@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from .config import settings
 from .models import Base
@@ -22,8 +22,18 @@ engine = _make_engine()
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
+def _migrate(eng) -> None:
+    with eng.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN llm_provider VARCHAR(32) DEFAULT 'anthropic'"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+
+
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    _migrate(engine)
 
 
 def get_db():

@@ -7,9 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
-from ..claude_client import get_client
-from ..config import settings
 from ..db import get_db
+from ..llm_client import call_llm
 from ..models import Brain, BrainFile, BrainRelationship, User
 from ..readiness import compute_readiness
 from ..schemas import (
@@ -162,11 +161,9 @@ def discover_relationships(user: User = Depends(current_user), db: Session = Dep
 
     brains_text = "\n\n---\n\n".join(sections)
 
-    client = get_client(user.encrypted_anthropic_key)
-    response = client.messages.create(
-        model=settings.claude_model,
-        max_tokens=1024,
-        system=(
+    raw = call_llm(
+        user,
+        (
             "You analyse knowledge-base documents to find relationships between systems and services. "
             "Return ONLY a valid JSON array — no prose, no fences. "
             'Each item must have: {"from_slug":"…","to_slug":"…","rel_type":"…","reason":"…"}. '
@@ -174,16 +171,16 @@ def discover_relationships(user: User = Depends(current_user), db: Session = Dep
             "Only suggest relationships clearly supported by the content. "
             "Return [] if nothing is clear."
         ),
-        messages=[{
+        [{
             "role": "user",
             "content": (
                 f"Find relationships between these brains:\n\n{brains_text}\n\n"
                 "Return a JSON array of suggested relationships."
             ),
         }],
+        max_tokens=1024,
     )
-
-    raw = response.content[0].text.strip()
+    raw = raw.strip()
     match = re.search(r"\[.*\]", raw, re.DOTALL)
     if not match:
         return []

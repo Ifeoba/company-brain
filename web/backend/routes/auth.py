@@ -54,7 +54,8 @@ def me(user: User = Depends(current_user)):
         github_username=user.github_username,
         email=user.email,
         avatar_url=user.avatar_url,
-        has_anthropic_key=user.encrypted_anthropic_key is not None,
+        has_api_key=user.encrypted_anthropic_key is not None,
+        llm_provider=user.llm_provider or "anthropic",
         created_at=user.created_at,
     )
 

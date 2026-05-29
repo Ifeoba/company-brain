@@ -3,7 +3,7 @@ import { api, apiBlob } from "./client";
 import type {
   BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
   Collaborator, ExpertQuestion, FileContent, FileSummary, InterviewState,
-  PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
+  ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
   User, WorkspaceNode,
 } from "../types";
 
@@ -28,11 +28,19 @@ export function useLogout() {
   });
 }
 
+export function useProviders() {
+  return useQuery<ProviderInfo[]>({
+    queryKey: ["providers"],
+    queryFn: () => api("/api/me/providers"),
+    staleTime: Infinity,
+  });
+}
+
 export function useSetApiKey() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (api_key: string) =>
-      api("/api/me/anthropic-key", { method: "PUT", body: JSON.stringify({ api_key }) }),
+    mutationFn: ({ provider, api_key }: { provider: string; api_key: string }) =>
+      api("/api/me/api-key", { method: "PUT", body: JSON.stringify({ provider, api_key }) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
   });
 }
@@ -40,7 +48,7 @@ export function useSetApiKey() {
 export function useDeleteApiKey() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api("/api/me/anthropic-key", { method: "DELETE" }),
+    mutationFn: () => api("/api/me/api-key", { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
   });
 }
