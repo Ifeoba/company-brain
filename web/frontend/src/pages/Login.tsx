@@ -4,7 +4,7 @@ export default function Login() {
   return (
     <div className="signin-shell">
       <div className="signin-card">
-        <span className="brand-mark-lg" />
+        <img src="/logo.png" className="brand-mark-lg" alt="Company Brain" />
         <h1>Company Brain</h1>
         <div className="tagline">
           Author a brain for one service at your company.

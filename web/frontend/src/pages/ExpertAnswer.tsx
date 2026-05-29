@@ -50,7 +50,7 @@ export default function ExpertAnswer() {
     <div className="expert-shell">
       <div className="expert-topbar">
         <span className="wordmark">
-          <span className="brand-mark" />
+          <img src="/logo.png" className="brand-mark" alt="" />
           Company Brain
         </span>
       </div>

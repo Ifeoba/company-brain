@@ -11,7 +11,7 @@ export default function AppTopbar() {
   return (
     <div className="bl-topbar">
       <Link to="/" className="wordmark">
-        <span className="brand-mark" />
+        <img src="/logo.png" className="brand-mark" alt="" />
         Company Brain
       </Link>
       <div className="spacer" />

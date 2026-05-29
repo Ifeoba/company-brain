@@ -104,20 +104,17 @@
 
 /* ---------- BRAND ---------- */
 .brain-ui .brand-mark {
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, var(--gauge), var(--info) 65%, var(--drift));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gauge) 30%, transparent);
+  width: 22px; height: 22px;
   display: inline-block;
   flex-shrink: 0;
+  object-fit: contain;
+  vertical-align: middle;
 }
 .brain-ui .brand-mark-lg {
-  width: 48px; height: 48px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, var(--gauge), var(--info) 65%, var(--drift));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gauge) 25%, transparent);
+  width: 72px; height: 72px;
   display: block;
   margin: 0 auto 24px;
+  object-fit: contain;
 }
 .brain-ui .wordmark {
   display: inline-flex; align-items: center; gap: 9px;

@@ -67,7 +67,7 @@ export default function BrainAuthor() {
         {/* Topbar */}
         <div className="ba-topbar">
           <span className="wordmark">
-            <span className="brand-mark" />
+            <img src="/logo.png" className="brand-mark" alt="" />
             Company Brain
           </span>
           <span style={{ color: "var(--dimmer)" }}>/</span>
