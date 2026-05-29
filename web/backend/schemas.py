@@ -199,3 +199,34 @@ class ExpertAnswerRequest(BaseModel):
 
 class CSRFToken(BaseModel):
     csrf_token: str
+
+
+# ── Continuous capture (brain updates) ────────────────────────────────────────
+
+class BrainUpdateLinkOut(BaseModel):
+    token: str
+
+
+class BrainUpdateOut(BaseModel):
+    id: str
+    contributor_name: str
+    contributor_email: str
+    topic: str
+    content: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PublicBrainUpdateOut(BaseModel):
+    brain_name: str
+    asker_name: str
+
+
+class SubmitUpdateRequest(BaseModel):
+    contributor_name: str
+    contributor_email: str = ""
+    topic: str = ""
+    content: str

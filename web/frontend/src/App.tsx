@@ -5,6 +5,7 @@ import BrainsList from "./pages/BrainsList";
 import ExpertAnswer from "./pages/ExpertAnswer";
 import Login from "./pages/Login";
 import Settings from "./pages/Settings";
+import UpdatePage from "./pages/UpdatePage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { data: user, isLoading, isError } = useMe();
@@ -26,6 +27,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/q/:token" element={<ExpertAnswer />} />
+          <Route path="/update/:token" element={<UpdatePage />} />
           <Route
             path="/"
             element={

@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "./client";
 import type {
-  BrainDetail, BrainSummary, Collaborator, ExpertQuestion,
-  FileContent, FileSummary, InterviewState, PublicQuestion,
-  ReadinessOut, User,
+  BrainDetail, BrainSummary, BrainUpdate, BrainUpdateLink, Collaborator,
+  ExpertQuestion, FileContent, FileSummary, InterviewState, PublicBrainUpdate,
+  PublicQuestion, ReadinessOut, User,
 } from "../types";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -244,6 +244,69 @@ export function useSubmitAnswer(token: string) {
         body: JSON.stringify({ answer_text }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["public-question", token] }),
+  });
+}
+
+// ── Continuous capture (brain updates) ────────────────────────────────────────
+
+export function useGetUpdateLink(slug: string) {
+  return useMutation({
+    mutationFn: () =>
+      api<BrainUpdateLink>(`/api/brains/${slug}/update-link`, { method: "POST" }),
+  });
+}
+
+export function useBrainUpdates(slug: string) {
+  return useQuery<BrainUpdate[]>({
+    queryKey: ["brain-updates", slug],
+    queryFn: () => api(`/api/brains/${slug}/updates`),
+    enabled: !!slug,
+  });
+}
+
+export function useIntegrateUpdate(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (update_id: string) =>
+      api(`/api/brains/${slug}/updates/${update_id}/integrate`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["brain-updates", slug] });
+      qc.invalidateQueries({ queryKey: ["files", slug] });
+      qc.invalidateQueries({ queryKey: ["readiness", slug] });
+    },
+  });
+}
+
+export function useDismissUpdate(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (update_id: string) =>
+      api(`/api/brains/${slug}/updates/${update_id}/dismiss`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["brain-updates", slug] }),
+  });
+}
+
+export function usePublicBrainUpdate(token: string) {
+  return useQuery<PublicBrainUpdate>({
+    queryKey: ["public-brain-update", token],
+    queryFn: () => api(`/api/update/${token}`),
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+export function useSubmitBrainUpdate(token: string) {
+  return useMutation({
+    mutationFn: (body: {
+      contributor_name: string;
+      contributor_email?: string;
+      topic?: string;
+      content: string;
+    }) =>
+      api(`/api/update/${token}`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
   });
 }
 

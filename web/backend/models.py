@@ -46,6 +46,7 @@ class Brain(Base):
     interview_state = relationship("InterviewState", back_populates="brain", uselist=False, cascade="all, delete-orphan")
     collaborators = relationship("Collaborator", back_populates="brain", cascade="all, delete-orphan")
     expert_questions = relationship("ExpertQuestion", back_populates="brain", cascade="all, delete-orphan")
+    update_link = relationship("BrainUpdateLink", back_populates="brain", uselist=False, cascade="all, delete-orphan")
 
 
 class BrainFile(Base):
@@ -121,3 +122,30 @@ class ExpertAnswer(Base):
     submitted_at = Column(DateTime, default=datetime.utcnow)
 
     question = relationship("ExpertQuestion", back_populates="answer")
+
+
+class BrainUpdateLink(Base):
+    __tablename__ = "brain_update_links"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False, unique=True)
+    token = Column(String(32), unique=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    brain = relationship("Brain", back_populates="update_link")
+    updates = relationship("BrainUpdate", back_populates="link", cascade="all, delete-orphan")
+
+
+class BrainUpdate(Base):
+    __tablename__ = "brain_updates"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    link_id = Column(String(36), ForeignKey("brain_update_links.id"), nullable=False)
+    contributor_name = Column(String(256), nullable=False)
+    contributor_email = Column(String(256), default="")
+    topic = Column(String(256), default="")
+    content = Column(Text, nullable=False)
+    status = Column(String(16), default="pending")  # pending | integrated | dismissed
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    link = relationship("BrainUpdateLink", back_populates="updates")

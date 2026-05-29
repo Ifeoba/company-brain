@@ -99,3 +99,22 @@ export interface PublicQuestion {
   already_answered: boolean;
   existing_answer: string | null;
 }
+
+export interface BrainUpdateLink {
+  token: string;
+}
+
+export interface BrainUpdate {
+  id: string;
+  contributor_name: string;
+  contributor_email: string;
+  topic: string;
+  content: string;
+  status: "pending" | "integrated" | "dismissed";
+  created_at: string;
+}
+
+export interface PublicBrainUpdate {
+  brain_name: string;
+  asker_name: string;
+}

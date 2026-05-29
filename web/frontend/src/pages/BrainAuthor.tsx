@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  useBrain, useCollaborators, useExpertQuestions, useExport,
-  useInterview, useMe, useReadiness,
+  useBrain, useBrainUpdates, useCollaborators, useDismissUpdate,
+  useExpertQuestions, useExport, useGetUpdateLink, useInterview,
+  useIntegrateUpdate, useMe, useReadiness,
 } from "../api/hooks";
 import AskExpertModal from "../components/AskExpertModal";
 import Avatar from "../components/Avatar";
@@ -19,8 +20,12 @@ export default function BrainAuthor() {
   const { data: readiness } = useReadiness(slug!);
   const { data: collaborators = [] } = useCollaborators(slug!);
   const { data: expertQuestions = [] } = useExpertQuestions(slug!);
+  const { data: brainUpdates = [] } = useBrainUpdates(slug!);
   const { data: user } = useMe();
   const exportBrain = useExport(slug!);
+  const getUpdateLink = useGetUpdateLink(slug!);
+  const integrateUpdate = useIntegrateUpdate(slug!);
+  const dismissUpdate = useDismissUpdate(slug!);
 
   const [activeStep, setActiveStep] = useState(1);
   const [draftContent, setDraftContent] = useState<Record<string, string>>({});
@@ -28,6 +33,7 @@ export default function BrainAuthor() {
   const [toast, setToast] = useState("");
   const [showValidation, setShowValidation] = useState(false);
   const [showAnswers, setShowAnswers] = useState(false);
+  const [showUpdates, setShowUpdates] = useState(false);
 
   if (!brain || !interview) {
     return (
@@ -82,6 +88,11 @@ export default function BrainAuthor() {
               {answeredQuestions.length} expert answer{answeredQuestions.length > 1 ? "s" : ""}
             </button>
           )}
+          {brainUpdates.filter((u) => u.status === "pending").length > 0 && (
+            <button className="btn btn-sm btn-ghost text-accent" onClick={() => setShowUpdates(!showUpdates)}>
+              {brainUpdates.filter((u) => u.status === "pending").length} update{brainUpdates.filter((u) => u.status === "pending").length > 1 ? "s" : ""}
+            </button>
+          )}
           <button className="btn btn-sm" onClick={() => setShowValidation(true)}>
             Readiness check
           </button>
@@ -99,6 +110,62 @@ export default function BrainAuthor() {
         {/* Content */}
         <div className="ba-content">
           <div className="ba-section">
+            {/* Knowledge updates panel */}
+            {showUpdates && (
+              <div className="ba-expert-panel">
+                <div className="ba-expert-panel-head">
+                  <span>Knowledge updates</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      onClick={async () => {
+                        const link = await getUpdateLink.mutateAsync();
+                        const url = `${window.location.origin}/update/${link.token}`;
+                        navigator.clipboard.writeText(url);
+                        showToast("Update link copied.");
+                      }}
+                      disabled={getUpdateLink.isPending}
+                    >
+                      <Icon name="copy" size={12} />
+                      Copy share link
+                    </button>
+                    <button onClick={() => setShowUpdates(false)}>×</button>
+                  </div>
+                </div>
+                {brainUpdates.filter((u) => u.status === "pending").length === 0 && (
+                  <div style={{ padding: "16px", color: "var(--dim)", fontSize: 13 }}>
+                    No pending updates. Share the link above to let experts push knowledge anytime.
+                  </div>
+                )}
+                {brainUpdates.filter((u) => u.status === "pending").map((u) => (
+                  <div key={u.id} className="ba-expert-item">
+                    <div className="ba-expert-item-meta">
+                      From {u.contributor_name}
+                      {u.topic ? ` · ${u.topic}` : ""}
+                      {u.contributor_email ? ` · ${u.contributor_email}` : ""}
+                    </div>
+                    <div className="ba-expert-item-text">{u.content}</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={() => integrateUpdate.mutate(u.id)}
+                        disabled={integrateUpdate.isPending}
+                      >
+                        {integrateUpdate.isPending ? "Integrating…" : "Integrate with Claude"}
+                      </button>
+                      <button
+                        className="btn btn-sm btn-ghost"
+                        onClick={() => dismissUpdate.mutate(u.id)}
+                        disabled={dismissUpdate.isPending}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Expert answers panel */}
             {showAnswers && answeredQuestions.length > 0 && (
               <div className="ba-expert-panel">
