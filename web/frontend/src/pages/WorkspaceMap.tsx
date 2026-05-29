@@ -4,9 +4,9 @@ import ReactFlow, {
   Background, Controls, Handle, MarkerType,
   Position, useEdgesState, useNodesState,
 } from "reactflow";
-import type { Connection, Edge, NodeProps } from "reactflow";
+import type { Connection, Edge, EdgeMouseHandler, NodeProps } from "reactflow";
 import "reactflow/dist/style.css";
-import { useConfirmSuggestion, useDiscoverRelationships, useWorkspaceMap } from "../api/hooks";
+import { useConfirmSuggestion, useDiscoverRelationships, useRemoveRelationship, useWorkspaceMap } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
 import type { RelationshipSuggestion } from "../types";
@@ -80,6 +80,10 @@ export default function WorkspaceMap() {
   const [pending, setPending] = useState<{ source: string; target: string } | null>(null);
   const [connType, setConnType] = useState("depends-on");
   const [connError, setConnError] = useState("");
+  const [selectedEdge, setSelectedEdge] = useState<{ id: string; source: string; target: string; relType: string } | null>(null);
+  const [editType, setEditType] = useState("depends-on");
+  const [editError, setEditError] = useState("");
+  const removeMut = useRemoveRelationship(selectedEdge?.source ?? "");
 
   useEffect(() => {
     const saved = loadPositions();
@@ -99,6 +103,7 @@ export default function WorkspaceMap() {
           id: r.id,
           source: r.from_slug,
           target: r.to_slug,
+          data: { relType: r.rel_type },
           ...edgeStyle(r.rel_type),
         }))
       )
@@ -116,6 +121,13 @@ export default function WorkspaceMap() {
       setPending({ source: conn.source, target: conn.target });
       setConnError("");
     }
+  }, []);
+
+  const onEdgeClick: EdgeMouseHandler = useCallback((_: React.MouseEvent, edge: Edge) => {
+    const relType = edge.data?.relType ?? "related-to";
+    setSelectedEdge({ id: edge.id, source: edge.source, target: edge.target, relType });
+    setEditType(relType);
+    setEditError("");
   }, []);
 
   async function handleDiscover() {
@@ -140,8 +152,33 @@ export default function WorkspaceMap() {
     }
   }
 
+  async function handleEditSave() {
+    if (!selectedEdge) return;
+    setEditError("");
+    try {
+      await removeMut.mutateAsync(selectedEdge.id);
+      await confirmMut.mutateAsync({ from_slug: selectedEdge.source, to_slug: selectedEdge.target, rel_type: editType });
+      setSelectedEdge(null);
+    } catch (e: unknown) {
+      setEditError(e instanceof Error ? e.message : "Failed to update connection");
+    }
+  }
+
+  async function handleEditDelete() {
+    if (!selectedEdge) return;
+    setEditError("");
+    try {
+      await removeMut.mutateAsync(selectedEdge.id);
+      setSelectedEdge(null);
+    } catch (e: unknown) {
+      setEditError(e instanceof Error ? e.message : "Failed to delete connection");
+    }
+  }
+
   const fromName = mapData.find((n) => n.slug === pending?.source)?.name ?? "";
   const toName = mapData.find((n) => n.slug === pending?.target)?.name ?? "";
+  const editFromName = mapData.find((n) => n.slug === selectedEdge?.source)?.name ?? selectedEdge?.source ?? "";
+  const editToName = mapData.find((n) => n.slug === selectedEdge?.target)?.name ?? selectedEdge?.target ?? "";
 
   return (
     <div className="bl-shell">
@@ -208,6 +245,7 @@ export default function WorkspaceMap() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onEdgeClick={onEdgeClick}
             onNodeDragStop={onNodeDragStop}
             nodeTypes={nodeTypes}
             fitView
@@ -220,6 +258,42 @@ export default function WorkspaceMap() {
           </ReactFlow>
         )}
       </div>
+
+      {selectedEdge && (
+        <div className="wm-conn-overlay" onClick={(e) => e.target === e.currentTarget && setSelectedEdge(null)}>
+          <div className="wm-conn-popup">
+            <div className="wm-conn-title">Edit connection</div>
+            <div className="wm-conn-names">
+              <b>{editFromName}</b>
+              <span style={{ color: "var(--dimmer)", margin: "0 8px" }}>→</span>
+              <b>{editToName}</b>
+            </div>
+            <div className="wm-conn-options">
+              {Object.entries(REL_COLORS).map(([type, color]) => (
+                <button
+                  key={type}
+                  className={`wm-conn-option${editType === type ? " selected" : ""}`}
+                  style={editType === type ? { borderColor: color, color } : {}}
+                  onClick={() => setEditType(type)}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+            {editError && <div style={{ color: "var(--bad)", fontSize: 12, marginBottom: 8 }}>{editError}</div>}
+            <div className="wm-conn-actions">
+              <button className="btn btn-ghost btn-danger" onClick={handleEditDelete} disabled={removeMut.isPending || confirmMut.isPending}>
+                Delete
+              </button>
+              <div style={{ flex: 1 }} />
+              <button className="btn btn-ghost" onClick={() => setSelectedEdge(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleEditSave} disabled={removeMut.isPending || confirmMut.isPending || editType === selectedEdge.relType}>
+                {removeMut.isPending || confirmMut.isPending ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pending && (
         <div className="wm-conn-overlay" onClick={(e) => e.target === e.currentTarget && setPending(null)}>

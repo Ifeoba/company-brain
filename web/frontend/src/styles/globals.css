@@ -461,7 +461,9 @@
 .wm-conn-option { font-family: var(--font-mono); font-size: 11px; padding: 5px 12px; border-radius: 20px; border: 1.5px solid var(--border); background: transparent; color: var(--text-2); cursor: pointer; transition: border-color 0.1s, color 0.1s; }
 .wm-conn-option:hover { border-color: var(--border-2); }
 .wm-conn-option.selected { font-weight: 600; background: color-mix(in srgb, currentColor 8%, transparent); }
-.wm-conn-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.wm-conn-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.btn-danger { color: var(--bad) !important; }
+.btn-danger:hover { background: color-mix(in srgb, var(--bad) 10%, transparent) !important; }
 
 /* ============================================================
    MISC
