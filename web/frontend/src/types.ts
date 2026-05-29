@@ -163,3 +163,42 @@ export interface SemanticReviewOut {
   suggestions: string[];
   score: number;
 }
+
+// ── Runtime (Tier 3) ──────────────────────────────────────────────────────────
+
+export interface ReviewOut {
+  id: string;
+  verdict: "approved" | "corrected" | "rejected";
+  notes: string;
+  corrected_decision: string | null;
+  created_at: string;
+}
+
+export interface RunOut {
+  id: string;
+  brain_id: string;
+  case_text: string;
+  case_filename: string | null;
+  decision_text: string | null;
+  cited_rules: string[];
+  model_used: string;
+  tokens_in: number;
+  tokens_out: number;
+  status: "pending" | "completed" | "failed";
+  error_text: string | null;
+  created_at: string;
+  completed_at: string | null;
+  review: ReviewOut | null;
+  cost_usd: number;
+}
+
+export interface RunListItem {
+  id: string;
+  case_text: string;
+  case_filename: string | null;
+  decision_text: string | null;
+  status: "pending" | "completed" | "failed";
+  created_at: string;
+  verdict: "approved" | "corrected" | "rejected" | null;
+  cost_usd: number;
+}

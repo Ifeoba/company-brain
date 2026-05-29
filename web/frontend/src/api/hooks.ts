@@ -4,7 +4,7 @@ import type {
   BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
   Collaborator, ExpertQuestion, FileContent, FileSummary, InterviewState,
   ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
-  SemanticReviewOut, User, WorkspaceNode,
+  RunListItem, RunOut, SemanticReviewOut, User, WorkspaceNode,
 } from "../types";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -394,14 +394,95 @@ export function useConfirmSuggestion() {
 
 export function useExport(slug: string) {
   return useMutation({
-    mutationFn: async () => {
-      const blob = await apiBlob(`/api/brains/${slug}/export`);
-      const url = URL.createObjectURL(blob);
+    mutationFn: async (force: boolean) => {
+      const url = `/api/brains/${slug}/export${force ? "?force=true" : ""}`;
+      const blob = await apiBlob(url);
       const a = document.createElement("a");
-      a.href = url;
+      a.href = URL.createObjectURL(blob);
       a.download = `${slug}-brain.zip`;
       a.click();
-      URL.revokeObjectURL(url);
+      URL.revokeObjectURL(a.href);
+    },
+  });
+}
+
+// ── Runtime (Tier 3) ──────────────────────────────────────────────────────────
+
+export function useRuns(slug: string) {
+  return useQuery<RunListItem[]>({
+    queryKey: ["runs", slug],
+    queryFn: () => api(`/api/brains/${slug}/runs`),
+    enabled: !!slug,
+  });
+}
+
+export function useRun(slug: string, runId: string | null) {
+  return useQuery<RunOut>({
+    queryKey: ["run", slug, runId],
+    queryFn: () => api(`/api/brains/${slug}/runs/${runId}`),
+    enabled: !!slug && !!runId,
+    refetchInterval: (query) => {
+      const data = query.state.data as RunOut | undefined;
+      return data?.status === "pending" ? 1500 : false;
+    },
+  });
+}
+
+export function useCreateRun(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { case_text: string; case_filename?: string }) =>
+      api<{ run_id: string; status: string }>(`/api/brains/${slug}/runs`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["runs", slug] }),
+  });
+}
+
+export function useReviewRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      runId,
+      verdict,
+      notes,
+      corrected_decision,
+    }: {
+      runId: string;
+      verdict: string;
+      notes: string;
+      corrected_decision?: string;
+    }) =>
+      api(`/api/runs/${runId}/review`, {
+        method: "POST",
+        body: JSON.stringify({ verdict, notes, corrected_decision }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      qc.invalidateQueries({ queryKey: ["run"] });
+      qc.invalidateQueries({ queryKey: ["unsynced-count"] });
+    },
+  });
+}
+
+export function useUnsyncedCount(slug: string) {
+  return useQuery<{ count: number }>({
+    queryKey: ["unsynced-count", slug],
+    queryFn: () => api(`/api/brains/${slug}/runs/unsynced-count`),
+    enabled: !!slug,
+    refetchInterval: 30000,
+  });
+}
+
+export function useSyncEvals(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<{ synced_count: number }>(`/api/brains/${slug}/evals/sync`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["unsynced-count", slug] });
+      qc.invalidateQueries({ queryKey: ["readiness", slug] });
     },
   });
 }

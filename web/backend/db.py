@@ -1,4 +1,5 @@
 from __future__ import annotations
+from contextlib import contextmanager
 from pathlib import Path
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
@@ -9,7 +10,6 @@ from .models import Base
 def _make_engine(url: str | None = None):
     db_url = url or settings.database_url
     if db_url.startswith("sqlite"):
-        # Ensure data directory exists
         if "///" in db_url:
             db_path = db_url.split("///", 1)[1]
             if db_path and not db_path.startswith(":"):
@@ -28,7 +28,7 @@ def _migrate(eng) -> None:
             conn.execute(text("ALTER TABLE users ADD COLUMN llm_provider VARCHAR(32) DEFAULT 'anthropic'"))
             conn.commit()
         except Exception:
-            pass  # column already exists
+            pass
 
 
 def init_db() -> None:
@@ -40,5 +40,19 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    finally:
+        db.close()
+
+
+@contextmanager
+def session_scope():
+    """Context manager for DB sessions used in background tasks."""
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

@@ -283,3 +283,70 @@ class RelationshipSuggestion(BaseModel):
     to_name: str
     rel_type: str
     reason: str
+
+
+# ── Runtime (Tier 3) ──────────────────────────────────────────────────────────
+
+class CreateRunRequest(BaseModel):
+    case_text: str
+    case_filename: Optional[str] = None
+
+
+class ReviewOut(BaseModel):
+    id: str
+    verdict: str
+    notes: str
+    corrected_decision: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RunOut(BaseModel):
+    id: str
+    brain_id: str
+    case_text: str
+    case_filename: Optional[str]
+    decision_text: Optional[str]
+    cited_rules: list[str]
+    model_used: str
+    tokens_in: int
+    tokens_out: int
+    status: str
+    error_text: Optional[str]
+    created_at: datetime
+    completed_at: Optional[datetime]
+    review: Optional[ReviewOut]
+    cost_usd: float
+
+    class Config:
+        from_attributes = True
+
+
+class RunListItem(BaseModel):
+    id: str
+    case_text: str
+    case_filename: Optional[str]
+    decision_text: Optional[str]
+    status: str
+    created_at: datetime
+    verdict: Optional[str]
+    cost_usd: float
+
+    class Config:
+        from_attributes = True
+
+
+class CreateReviewRequest(BaseModel):
+    verdict: str  # approved | corrected | rejected
+    notes: str = ""
+    corrected_decision: Optional[str] = None
+
+
+class EvalSyncOut(BaseModel):
+    synced_count: int
+
+
+class UnsyncedCountOut(BaseModel):
+    count: int

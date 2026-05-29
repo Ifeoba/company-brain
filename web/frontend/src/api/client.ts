@@ -46,6 +46,9 @@ export async function api<T>(
 
 export async function apiBlob(path: string): Promise<Blob> {
   const resp = await fetch(path, { credentials: "include" });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({ detail: `HTTP ${resp.status}` }));
+    throw new Error(body.detail || `HTTP ${resp.status}`);
+  }
   return resp.blob();
 }

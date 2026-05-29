@@ -4,7 +4,7 @@ import {
   useAddRelationship, useBrain, useBrainRelationships, useBrainUpdates,
   useCollaborators, useDismissUpdate, useExpertQuestions, useExport,
   useGetUpdateLink, useInterview, useIntegrateUpdate, useMe, useReadiness,
-  useRemoveRelationship, useSemanticReview,
+  useRemoveRelationship, useSemanticReview, useSyncEvals, useUnsyncedCount,
 } from "../api/hooks";
 import { useBrains } from "../api/hooks";
 import AskExpertModal from "../components/AskExpertModal";
@@ -35,6 +35,9 @@ export default function BrainAuthor() {
   const removeRelationship = useRemoveRelationship(slug!);
 
   const semanticReview = useSemanticReview(slug!);
+  const syncEvals = useSyncEvals(slug!);
+  const { data: unsyncedData } = useUnsyncedCount(slug!);
+  const unsyncedCount = unsyncedData?.count ?? 0;
 
   const [activeStep, setActiveStep] = useState(1);
   const [draftContent, setDraftContent] = useState<Record<string, string>>({});
@@ -102,12 +105,24 @@ export default function BrainAuthor() {
               {answeredQuestions.length} expert answer{answeredQuestions.length > 1 ? "s" : ""}
             </button>
           )}
+          {unsyncedCount > 0 && (
+            <button
+              className="btn btn-sm btn-ghost text-accent"
+              onClick={() => syncEvals.mutate(undefined, { onSuccess: (d) => showToast(`${d.synced_count} eval${d.synced_count !== 1 ? "s" : ""} synced to brain.`) })}
+              disabled={syncEvals.isPending}
+            >
+              {syncEvals.isPending ? "Syncing…" : `Sync ${unsyncedCount} eval${unsyncedCount !== 1 ? "s" : ""}`}
+            </button>
+          )}
+          <Link to={`/brains/${slug}/run`} className="btn btn-sm btn-primary">
+            <Icon name="spark" size={11} /> Run
+          </Link>
           <button className="btn btn-sm" onClick={() => setShowValidation(true)}>
             How complete?
           </button>
           <button
             className="btn btn-sm"
-            onClick={() => exportBrain.mutate()}
+            onClick={() => exportBrain.mutate(false)}
             disabled={exportBrain.isPending}
           >
             <Icon name="download" size={11} />

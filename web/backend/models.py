@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Text, Integer, DateTime, ForeignKey,
+    Boolean, Column, String, Text, Integer, DateTime, ForeignKey,
     UniqueConstraint, LargeBinary,
 )
 from sqlalchemy.orm import DeclarativeBase, relationship
@@ -165,3 +165,61 @@ class BrainRelationship(Base):
 
     from_brain = relationship("Brain", foreign_keys=[from_brain_id])
     to_brain = relationship("Brain", foreign_keys=[to_brain_id])
+
+
+# ── Runtime (Tier 3) ──────────────────────────────────────────────────────────
+
+class Run(Base):
+    __tablename__ = "runs"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    case_text = Column(Text, nullable=False)
+    case_filename = Column(String(256), nullable=True)
+    decision_text = Column(Text, nullable=True)
+    cited_rules = Column(Text, default="[]")  # JSON array of strings
+    model_used = Column(String(128), nullable=False, default="")
+    tokens_in = Column(Integer, default=0)
+    tokens_out = Column(Integer, default=0)
+    status = Column(String(16), default="pending")  # pending | completed | failed
+    error_text = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    brain = relationship("Brain")
+    user = relationship("User")
+    review = relationship("Review", back_populates="run", uselist=False, cascade="all, delete-orphan")
+
+
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    run_id = Column(String(36), ForeignKey("runs.id"), nullable=False, unique=True)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    verdict = Column(String(16), nullable=False)  # approved | corrected | rejected
+    notes = Column(Text, default="")
+    corrected_decision = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    run = relationship("Run", back_populates="review")
+    user = relationship("User")
+    generated_eval = relationship("GeneratedEval", back_populates="review", uselist=False, cascade="all, delete-orphan")
+
+
+class GeneratedEval(Base):
+    __tablename__ = "generated_evals"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    review_id = Column(String(36), ForeignKey("reviews.id"), nullable=False, unique=True)
+    brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    case_text = Column(Text, nullable=False)
+    expected_outcome = Column(Text, nullable=False)
+    difficulty = Column(String(32), default="edge")
+    source = Column(String(64), default="production correction")
+    written_back = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    review = relationship("Review", back_populates="generated_eval")
+    brain = relationship("Brain")
