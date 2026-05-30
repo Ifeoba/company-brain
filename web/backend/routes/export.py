@@ -3,6 +3,7 @@ import json
 import textwrap
 import zipfile
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -91,7 +92,7 @@ def _get_brain(db: Session, slug: str, user: User) -> Brain:
     return brain
 
 
-def _file_complete(content: str | None) -> bool:
+def _file_complete(content: Optional[str]) -> bool:
     if not content or len(content.strip()) < 200:
         return False
     return "REPLACE WITH" not in content
@@ -127,7 +128,7 @@ def _generate_progress(files: dict[str, str], score: int) -> str:
     return "\n".join(lines)
 
 
-def _extract_service_blurb(service_def: str | None) -> str:
+def _extract_service_blurb(service_def: Optional[str]) -> str:
     if not service_def:
         return "_Service definition not yet completed._"
     for line in service_def.splitlines():
