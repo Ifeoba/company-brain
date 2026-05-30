@@ -242,6 +242,16 @@ export interface VaultSecretSummary {
   updated_at: string;
 }
 
+// ── Brain stats ───────────────────────────────────────────────────────────────
+
+export interface BrainStatsOut {
+  total_runs: number;
+  completed_runs: number;
+  failed_runs: number;
+  total_cost_usd: number;
+  last_run_at: string | null;
+}
+
 // ── Maintainer suggestions ────────────────────────────────────────────────────
 
 export interface MaintainerSuggestionOut {

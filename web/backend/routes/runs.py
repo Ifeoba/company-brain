@@ -165,6 +165,57 @@ def list_runs(
     return [_run_to_list_item(r) for r in runs]
 
 
+@router.get("/api/brains/{slug}/stats")
+def get_brain_stats(
+    slug: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    from sqlalchemy import func
+    brain = _get_brain(db, slug, user)
+    total = db.query(func.count(Run.id)).filter(Run.brain_id == brain.id).scalar() or 0
+    completed = db.query(func.count(Run.id)).filter(Run.brain_id == brain.id, Run.status == "completed").scalar() or 0
+    failed = db.query(func.count(Run.id)).filter(Run.brain_id == brain.id, Run.status == "failed").scalar() or 0
+    tokens_in = db.query(func.sum(Run.tokens_in)).filter(Run.brain_id == brain.id).scalar() or 0
+    tokens_out = db.query(func.sum(Run.tokens_out)).filter(Run.brain_id == brain.id).scalar() or 0
+    cost = round((tokens_in / 1_000_000) * _INPUT_COST_PER_M + (tokens_out / 1_000_000) * _OUTPUT_COST_PER_M, 4)
+    last_run = (
+        db.query(Run)
+        .filter(Run.brain_id == brain.id)
+        .order_by(Run.created_at.desc())
+        .first()
+    )
+    return {
+        "total_runs": total,
+        "completed_runs": completed,
+        "failed_runs": failed,
+        "total_cost_usd": cost,
+        "last_run_at": last_run.created_at.isoformat() if last_run and last_run.created_at else None,
+    }
+
+
+@router.post("/api/brains/{slug}/runs/{run_id}/retry")
+def retry_run(
+    slug: str,
+    run_id: str,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    brain = _get_brain(db, slug, user)
+    run = db.query(Run).filter_by(id=run_id, brain_id=brain.id, user_id=user.id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != "failed":
+        raise HTTPException(status_code=409, detail="Only failed runs can be retried")
+    run.status = "queued"
+    run.error_text = None
+    run.completed_at = None
+    db.commit()
+    _dispatch_run(run.id, background)
+    return {"run_id": run.id, "status": "queued"}
+
+
 @router.get("/api/brains/{slug}/runs/{run_id}")
 def get_run(
     slug: str,

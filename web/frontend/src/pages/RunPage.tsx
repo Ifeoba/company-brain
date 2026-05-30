@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useApproveToolCall, useBrain, useCreateRun, useDenyToolCall, useReviewRun, useRun, useRunEvents, useRunToolCalls, useRuns } from "../api/hooks";
+import { useApproveToolCall, useBrain, useBrainStats, useCreateRun, useDenyToolCall, useRetryRun, useReviewRun, useRun, useRunEvents, useRunToolCalls, useRuns } from "../api/hooks";
 import Icon from "../components/Icon";
 import type { RunListItem, RunOut, ToolCallOut } from "../types";
 
@@ -178,9 +178,11 @@ function ApprovalPanel({ slug, run }: { slug: string; run: RunOut }) {
 function DecisionPanel({
   run,
   onReview,
+  onRetry,
 }: {
   run: RunOut;
   onReview: (verdict: "approved" | "corrected" | "rejected") => void;
+  onRetry?: () => void;
 }) {
   const [showCorrection, setShowCorrection] = useState(false);
   const [notes, setNotes] = useState("");
@@ -214,7 +216,12 @@ function DecisionPanel({
   if (run.status === "failed") {
     return (
       <div className="run-error">
-        <strong>Run failed.</strong> {run.error_text ?? "Unknown error."}
+        <div><strong>Run failed.</strong> {run.error_text ?? "Unknown error."}</div>
+        {onRetry && (
+          <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={onRetry}>
+            Retry
+          </button>
+        )}
       </div>
     );
   }
@@ -348,6 +355,8 @@ export default function RunPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: brain } = useBrain(slug!);
   const createRun = useCreateRun(slug!);
+  const retryRun = useRetryRun(slug!);
+  const { data: stats } = useBrainStats(slug!);
   const qc = useQueryClient();
 
   const [caseText, setCaseText] = useState("");
@@ -458,7 +467,29 @@ export default function RunPage() {
             <ApprovalPanel slug={slug!} run={activeRun} />
           )}
           {activeRun && (
-            <DecisionPanel run={activeRun} onReview={handleReview} />
+            <DecisionPanel
+              run={activeRun}
+              onReview={handleReview}
+              onRetry={activeRun.status === "failed" ? () => {
+                retryRun.mutate(activeRun.id, {
+                  onSuccess: (r) => setActiveRunId((r as { run_id: string }).run_id),
+                });
+              } : undefined}
+            />
+          )}
+
+          {stats && stats.total_runs > 0 && (
+            <div className="run-stats-bar">
+              <span className="dim">{stats.total_runs} run{stats.total_runs !== 1 ? "s" : ""}</span>
+              <span className="dot-sep" />
+              <span className="dim">{stats.completed_runs} completed</span>
+              {stats.failed_runs > 0 && (
+                <><span className="dot-sep" /><span style={{ color: "var(--bad)", fontSize: 11.5 }}>{stats.failed_runs} failed</span></>
+              )}
+              {stats.total_cost_usd > 0 && (
+                <><span className="dot-sep" /><span className="dim">${stats.total_cost_usd.toFixed(4)} total</span></>
+              )}
+            </div>
           )}
 
           <RunHistory

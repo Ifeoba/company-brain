@@ -267,8 +267,18 @@ def execute_run(run_id: str, workspace_id: Optional[str] = None) -> None:
             })
 
         except Exception as exc:
+            # Detect transient errors (rate limit, connection) — commit queued status and re-raise
+            # so Celery's retry mechanism picks it up.
+            err_str = str(exc).lower()
+            is_transient = any(k in err_str for k in ("rate_limit", "rate limit", "connection", "timeout", "overloaded"))
+            if is_transient and not getattr(exc, "_already_retried", False):
+                run.status = "queued"
+                run.error_text = "Transient error — will retry: {}".format(str(exc)[:200])
+                run.completed_at = None
+                db.commit()  # commit before re-raise; session_scope rollback is a no-op after commit
+                raise
             run.status = "failed"
-            run.error_text = str(exc)
+            run.error_text = str(exc)[:500]
             run.completed_at = datetime.utcnow()
             sse.publish(ws_id, {
                 "type": "run.failed",

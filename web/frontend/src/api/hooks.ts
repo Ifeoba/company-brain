@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "./client";
 import type {
-  AuditLogEntry, BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
+  AuditLogEntry, BrainDetail, BrainRelationship, BrainStatsOut, BrainSummary, BrainUpdate, BrainUpdateLink,
   BuiltinTool, Collaborator, EscalationOut, ExpertQuestion, FileContent, FileSummary, InterviewState,
   MaintainerSuggestionOut, ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
   RunListItem, RunOut, SemanticReviewOut, ToolCallOut, ToolOut, TriggerOut, User, VaultSecretSummary, WorkspaceNode,
@@ -475,6 +475,27 @@ export function useReviewRun() {
       qc.invalidateQueries({ queryKey: ["runs"] });
       qc.invalidateQueries({ queryKey: ["run"] });
       qc.invalidateQueries({ queryKey: ["unsynced-count"] });
+    },
+  });
+}
+
+export function useBrainStats(slug: string) {
+  return useQuery<BrainStatsOut>({
+    queryKey: ["brain-stats", slug],
+    queryFn: () => api(`/api/brains/${slug}/stats`),
+    enabled: !!slug,
+    staleTime: 60000,
+  });
+}
+
+export function useRetryRun(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) =>
+      api(`/api/brains/${slug}/runs/${runId}/retry`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["runs", slug] });
+      qc.invalidateQueries({ queryKey: ["run", slug] });
     },
   });
 }

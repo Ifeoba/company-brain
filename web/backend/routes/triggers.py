@@ -274,6 +274,20 @@ def _fire_trigger(
     if not owner or not owner.encrypted_anthropic_key:
         raise HTTPException(status_code=400, detail="Brain owner has no API key configured")
 
+    # Rate limit: max 10 inbound runs per trigger per minute
+    from datetime import timedelta
+    one_min_ago = datetime.utcnow() - timedelta(seconds=60)
+    recent_count = (
+        db.query(Run)
+        .filter(Run.trigger_id == trigger.id, Run.created_at >= one_min_ago)
+        .count()
+    )
+    if recent_count >= 10:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded — max 10 runs per minute per trigger.",
+        )
+
     run = Run(
         brain_id=trigger.brain_id,
         user_id=owner.id,
