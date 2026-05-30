@@ -184,7 +184,7 @@ export interface RunOut {
   model_used: string;
   tokens_in: number;
   tokens_out: number;
-  status: "pending" | "completed" | "failed";
+  status: "pending" | "queued" | "running" | "awaiting_approval" | "completed" | "failed";
   error_text: string | null;
   created_at: string;
   completed_at: string | null;
@@ -197,8 +197,21 @@ export interface RunListItem {
   case_text: string;
   case_filename: string | null;
   decision_text: string | null;
-  status: "pending" | "completed" | "failed";
+  status: "pending" | "queued" | "running" | "awaiting_approval" | "completed" | "failed";
   created_at: string;
   verdict: "approved" | "corrected" | "rejected" | null;
   cost_usd: number;
+}
+
+export interface TriggerOut {
+  id: string;
+  kind: "webhook" | "email" | "schedule" | "database" | "manual";
+  name: string;
+  is_active: boolean;
+  last_fired_at: string | null;
+  created_at: string;
+  cron_expression: string | null;
+  inbound_email: string | null;
+  secret: string | null;
+  webhook_url: string | null;
 }

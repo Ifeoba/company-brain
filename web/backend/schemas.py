@@ -350,3 +350,12 @@ class EvalSyncOut(BaseModel):
 
 class UnsyncedCountOut(BaseModel):
     count: int
+
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+
+class TriggerCreate(BaseModel):
+    kind: str
+    name: str
+    cron_expression: Optional[str] = None
+    config: Optional[dict] = None

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useBrain, useCreateRun, useReviewRun, useRun, useRuns } from "../api/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useBrain, useCreateRun, useReviewRun, useRun, useRunEvents, useRuns } from "../api/hooks";
 import Icon from "../components/Icon";
 import type { RunListItem, RunOut } from "../types";
 
@@ -113,7 +114,7 @@ function DecisionPanel({
     onReview(verdict);
   }
 
-  if (run.status === "pending") {
+  if (run.status === "pending" || run.status === "queued" || run.status === "running") {
     return (
       <div className="run-pending">
         <svg className="spin" width={20} height={20} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5}>
@@ -242,7 +243,8 @@ function RunHistory({ slug, onSelect, selectedId }: { slug: string; onSelect: (i
             <span className="dim" style={{ fontSize: 11 }}>
               {new Date(r.created_at).toLocaleString()}
             </span>
-            {r.status === "pending" && <span className="pill info" style={{ fontSize: 10 }}>Running</span>}
+            {(r.status === "pending" || r.status === "queued" || r.status === "running") && <span className="pill info" style={{ fontSize: 10 }}>Running…</span>}
+            {r.status === "awaiting_approval" && <span className="pill warn" style={{ fontSize: 10 }}>Needs approval</span>}
             {r.status === "failed" && <span className="pill bad" style={{ fontSize: 10 }}>Failed</span>}
             <VerdictBadge verdict={r.verdict} />
             {r.cost_usd > 0 && (
@@ -260,6 +262,7 @@ export default function RunPage() {
   const { slug } = useParams<{ slug: string }>();
   const { data: brain } = useBrain(slug!);
   const createRun = useCreateRun(slug!);
+  const qc = useQueryClient();
 
   const [caseText, setCaseText] = useState("");
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -267,6 +270,14 @@ export default function RunPage() {
   const [runError, setRunError] = useState("");
 
   const { data: activeRun } = useRun(slug!, activeRunId);
+
+  // SSE: invalidate immediately when a run completes, cutting polling latency to ~0
+  useRunEvents((event) => {
+    if (event.type === "run.completed" || event.type === "run.failed") {
+      qc.invalidateQueries({ queryKey: ["run", slug, event.run_id as string] });
+      qc.invalidateQueries({ queryKey: ["runs", slug] });
+    }
+  });
 
   function showToast(msg: string) {
     setToast(msg);

@@ -6,6 +6,7 @@ import {
   useGetUpdateLink, useInterview, useIntegrateUpdate, useMe, useReadiness,
   useRemoveRelationship, useSemanticReview, useSyncEvals, useUnsyncedCount,
 } from "../api/hooks";
+import TriggersModal from "../components/TriggersModal";
 import { useBrains } from "../api/hooks";
 import AskExpertModal from "../components/AskExpertModal";
 import Avatar from "../components/Avatar";
@@ -51,6 +52,7 @@ export default function BrainAuthor() {
   const [showConnections, setShowConnections] = useState(false);
   const [newRelTarget, setNewRelTarget] = useState("");
   const [newRelType, setNewRelType] = useState("depends-on");
+  const [showTriggers, setShowTriggers] = useState(false);
 
   if (!brain || !interview) {
     return (
@@ -114,6 +116,9 @@ export default function BrainAuthor() {
               {syncEvals.isPending ? "Syncing…" : `Sync ${unsyncedCount} eval${unsyncedCount !== 1 ? "s" : ""}`}
             </button>
           )}
+          <button className="btn btn-sm" onClick={() => setShowTriggers(true)}>
+            Triggers
+          </button>
           <Link to={`/brains/${slug}/run`} className="btn btn-sm btn-primary">
             <Icon name="spark" size={11} /> Run
           </Link>
@@ -342,6 +347,10 @@ export default function BrainAuthor() {
           result={semanticReview.data ?? null}
           error={semanticReviewError}
         />
+      )}
+
+      {showTriggers && (
+        <TriggersModal slug={slug!} onClose={() => setShowTriggers(false)} />
       )}
     </div>
   );

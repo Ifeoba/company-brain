@@ -1,10 +1,11 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "./client";
 import type {
   BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
   Collaborator, ExpertQuestion, FileContent, FileSummary, InterviewState,
   ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
-  RunListItem, RunOut, SemanticReviewOut, User, WorkspaceNode,
+  RunListItem, RunOut, SemanticReviewOut, TriggerOut, User, WorkspaceNode,
 } from "../types";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -423,9 +424,21 @@ export function useRun(slug: string, runId: string | null) {
     enabled: !!slug && !!runId,
     refetchInterval: (query) => {
       const data = query.state.data as RunOut | undefined;
-      return data?.status === "pending" ? 1500 : false;
+      if (!data) return 1500;
+      return ["completed", "failed"].includes(data.status) ? false : 1500;
     },
   });
+}
+
+export function useRunEvents(onEvent: (event: Record<string, unknown>) => void) {
+  useEffect(() => {
+    const src = new EventSource("/api/events", { withCredentials: true });
+    src.onmessage = (e) => {
+      try { onEvent(JSON.parse(e.data as string)); } catch {}
+    };
+    return () => src.close();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 }
 
 export function useCreateRun(slug: string) {
@@ -484,5 +497,48 @@ export function useSyncEvals(slug: string) {
       qc.invalidateQueries({ queryKey: ["unsynced-count", slug] });
       qc.invalidateQueries({ queryKey: ["readiness", slug] });
     },
+  });
+}
+
+// ── Triggers ──────────────────────────────────────────────────────────────────
+
+export function useTriggers(slug: string) {
+  return useQuery<TriggerOut[]>({
+    queryKey: ["triggers", slug],
+    queryFn: () => api(`/api/brains/${slug}/triggers`),
+    enabled: !!slug,
+  });
+}
+
+export function useCreateTrigger(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { kind: string; name: string; cron_expression?: string; config?: Record<string, unknown> }) =>
+      api<TriggerOut>(`/api/brains/${slug}/triggers`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["triggers", slug] }),
+  });
+}
+
+export function useDeleteTrigger(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (triggerId: string) =>
+      api(`/api/brains/${slug}/triggers/${triggerId}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["triggers", slug] }),
+  });
+}
+
+export function useToggleTrigger(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ triggerId, is_active }: { triggerId: string; is_active: boolean }) =>
+      api<TriggerOut>(`/api/brains/${slug}/triggers/${triggerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active }),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["triggers", slug] }),
   });
 }
