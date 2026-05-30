@@ -161,6 +161,67 @@ def execute_run_task(self, run_id: str) -> None:
         raise self.retry(exc=exc, countdown=2 ** self.request.retries)
 
 
+# ── Schedule polling ──────────────────────────────────────────────────────────
+
+@celery_app.task(name="backend.tasks.check_scheduled_triggers")
+def check_scheduled_triggers() -> None:
+    """
+    Runs every minute via beat. Checks all active schedule triggers and fires
+    any whose cron expression has elapsed since the last fire.
+    """
+    try:
+        from croniter import croniter
+    except ImportError:
+        return  # croniter not installed — skip
+
+    from .models import Brain, Run, Trigger, User
+
+    now = datetime.utcnow()
+
+    with session_scope() as db:
+        triggers = (
+            db.query(Trigger)
+            .filter_by(kind="schedule", is_active=True)
+            .all()
+        )
+        for trigger in triggers:
+            if not trigger.cron_expression:
+                continue
+            try:
+                # Anchor iterator to last_fired_at (or 2 min ago to catch startup)
+                from datetime import timedelta
+                anchor = trigger.last_fired_at or (now - timedelta(minutes=2))
+                cron = croniter(trigger.cron_expression, anchor)
+                next_fire = cron.get_next(datetime)
+                if next_fire > now:
+                    continue  # not yet due
+
+                brain = db.query(Brain).filter_by(id=trigger.brain_id).first()
+                owner = db.query(User).filter_by(id=brain.owner_id).first() if brain else None
+                if not brain or not owner or not owner.encrypted_anthropic_key:
+                    continue
+
+                case_text = "Scheduled trigger: {} (fired at {})".format(
+                    trigger.name, now.strftime("%Y-%m-%d %H:%M UTC")
+                )
+                run = Run(
+                    brain_id=trigger.brain_id,
+                    user_id=owner.id,
+                    workspace_id=trigger.workspace_id,
+                    trigger_id=trigger.id,
+                    case_text=case_text,
+                    status="queued",
+                    model_used="",
+                    created_at=now,
+                )
+                db.add(run)
+                trigger.last_fired_at = now
+                db.flush()
+                execute_run_task.delay(run.id)
+            except Exception:
+                pass
+
+
 # ── Maintainer ─────────────────────────────────────────────────────────────────
 
 @celery_app.task(name="backend.tasks.run_maintainer_for_brain")

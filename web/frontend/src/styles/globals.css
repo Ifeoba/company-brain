@@ -569,6 +569,17 @@
   border: 1px solid #fcd34d; border-radius: 4px; padding: 6px 10px; margin-top: 8px;
 }
 
+/* Kind selector tabs */
+.trigger-kind-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+.trigger-kind-tab {
+  flex: 1; padding: 6px 0; font-size: 12px; font-weight: 500; border-radius: 5px;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-2);
+  cursor: pointer; transition: background .12s, border-color .12s, color .12s;
+}
+.trigger-kind-tab:hover { background: var(--surface-2); }
+.trigger-kind-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); font-weight: 600; }
+.input-error { border-color: var(--bad) !important; }
+
 /* Toggle switch */
 .trigger-toggle { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
 .trigger-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }

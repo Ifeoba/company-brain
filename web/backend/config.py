@@ -27,5 +27,8 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     run_daily_cap: int = 50
 
+    # Email triggers
+    inbound_email_domain: str = "inbound.companybrain.com"
+
 
 settings = Settings()

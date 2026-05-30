@@ -60,6 +60,19 @@ function KindBadge({ kind }: { kind: string }) {
   );
 }
 
+const KIND_OPTIONS: { value: string; label: string; desc: string }[] = [
+  { value: "webhook", label: "Webhook", desc: "POST from an external system" },
+  { value: "schedule", label: "Schedule", desc: "Run on a cron schedule" },
+  { value: "email", label: "Email", desc: "Fire when an email arrives" },
+];
+
+const CRON_EXAMPLES = [
+  { label: "Every hour", expr: "0 * * * *" },
+  { label: "Daily 9 AM UTC", expr: "0 9 * * *" },
+  { label: "Every 15 min", expr: "*/15 * * * *" },
+  { label: "Weekdays 8 AM UTC", expr: "0 8 * * 1-5" },
+];
+
 export default function TriggersModal({ slug, onClose }: Props) {
   const { data: triggers = [], isLoading } = useTriggers(slug);
   const createTrigger = useCreateTrigger(slug);
@@ -67,17 +80,39 @@ export default function TriggersModal({ slug, onClose }: Props) {
   const toggleTrigger = useToggleTrigger(slug);
 
   const [name, setName] = useState("");
+  const [kind, setKind] = useState<"webhook" | "schedule" | "email">("webhook");
+  const [cronExpr, setCronExpr] = useState("");
+  const [cronError, setCronError] = useState("");
   const [newTrigger, setNewTrigger] = useState<TriggerOut | null>(null);
+
+  function validateCron(expr: string): boolean {
+    // Simple client-side format check: 5 space-separated fields
+    const parts = expr.trim().split(/\s+/);
+    if (parts.length !== 5) {
+      setCronError("Expected 5 fields: minute hour day month weekday");
+      return false;
+    }
+    setCronError("");
+    return true;
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    if (kind === "schedule" && !validateCron(cronExpr)) return;
     try {
-      const t = await createTrigger.mutateAsync({ kind: "webhook", name: name.trim() });
+      const t = await createTrigger.mutateAsync({
+        kind,
+        name: name.trim(),
+        cron_expression: kind === "schedule" ? cronExpr.trim() : undefined,
+      });
       setNewTrigger(t);
       setName("");
+      setCronExpr("");
     } catch {}
   }
+
+  const canSubmit = name.trim() && (kind !== "schedule" || cronExpr.trim()) && !createTrigger.isPending;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -92,14 +127,24 @@ export default function TriggersModal({ slug, onClose }: Props) {
           {isLoading ? (
             <p className="dim" style={{ fontSize: 13 }}>Loading…</p>
           ) : triggers.length === 0 ? (
-            <p className="dim" style={{ fontSize: 13, marginBottom: 16 }}>No triggers yet. Add a webhook to start receiving cases from external systems.</p>
+            <p className="dim" style={{ fontSize: 13, marginBottom: 16 }}>
+              No triggers yet. Add one below to start receiving cases automatically.
+            </p>
           ) : (
             <div className="trigger-list">
               {triggers.map((t: TriggerOut) => (
                 <div key={t.id} className="trigger-row">
                   <KindBadge kind={t.kind} />
-                  <span style={{ fontSize: 13, flex: 1 }}>{t.name}</span>
-                  <span className="dim" style={{ fontSize: 11 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13 }}>{t.name}</div>
+                    {t.kind === "schedule" && t.cron_expression && (
+                      <code style={{ fontSize: 11, color: "var(--dim)" }}>{t.cron_expression}</code>
+                    )}
+                    {t.kind === "email" && t.inbound_email && (
+                      <code style={{ fontSize: 11, color: "var(--dim)" }}>{t.inbound_email}</code>
+                    )}
+                  </div>
+                  <span className="dim" style={{ fontSize: 11, flexShrink: 0 }}>
                     fired {relativeTime(t.last_fired_at)}
                   </span>
                   <label className="trigger-toggle" title={t.is_active ? "Disable" : "Enable"}>
@@ -126,47 +171,129 @@ export default function TriggersModal({ slug, onClose }: Props) {
 
           <hr className="trigger-divider" />
 
-          {/* Creation form */}
+          {/* Kind tabs */}
           <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: "var(--dimmer)" }}>
-            ADD WEBHOOK TRIGGER
+            ADD TRIGGER
           </div>
-          <form onSubmit={handleCreate} style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+          <div className="trigger-kind-tabs">
+            {KIND_OPTIONS.map((k) => (
+              <button
+                key={k.value}
+                type="button"
+                className={"trigger-kind-tab" + (kind === k.value ? " active" : "")}
+                onClick={() => { setKind(k.value as typeof kind); setCronError(""); }}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Creation form */}
+          <form onSubmit={handleCreate} style={{ marginBottom: 16 }}>
             <input
               className="ba-input"
-              placeholder="Name, e.g. Stripe events"
+              placeholder={
+                kind === "webhook" ? "Name, e.g. Stripe events" :
+                kind === "schedule" ? "Name, e.g. Daily review" :
+                "Name, e.g. Support inbox"
+              }
               value={name}
               onChange={(e) => setName(e.target.value)}
-              style={{ flex: 1, fontSize: 13 }}
+              style={{ width: "100%", fontSize: 13, marginBottom: 8, boxSizing: "border-box" }}
             />
+
+            {kind === "schedule" && (
+              <div style={{ marginBottom: 8 }}>
+                <input
+                  className={"ba-input" + (cronError ? " input-error" : "")}
+                  placeholder="Cron expression, e.g. 0 9 * * *"
+                  value={cronExpr}
+                  onChange={(e) => { setCronExpr(e.target.value); if (cronError) validateCron(e.target.value); }}
+                  style={{ width: "100%", fontSize: 13, fontFamily: "var(--font-mono)", boxSizing: "border-box" }}
+                />
+                {cronError ? (
+                  <p style={{ fontSize: 11, color: "var(--bad)", margin: "4px 0 0" }}>{cronError}</p>
+                ) : (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                    {CRON_EXAMPLES.map((ex) => (
+                      <button
+                        key={ex.expr}
+                        type="button"
+                        className="btn btn-sm"
+                        style={{ fontSize: 11 }}
+                        onClick={() => setCronExpr(ex.expr)}
+                      >
+                        {ex.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {kind === "email" && (
+              <p style={{ fontSize: 12, color: "var(--dim)", margin: "0 0 8px" }}>
+                An inbound email address will be generated. Forward emails there (via Resend or Postmark routing) to trigger runs.
+              </p>
+            )}
+
             <button
               className="btn btn-sm btn-primary"
               type="submit"
-              disabled={createTrigger.isPending || !name.trim()}
+              disabled={!canSubmit}
+              style={{ width: "100%" }}
             >
-              {createTrigger.isPending ? "Creating…" : "Create"}
+              {createTrigger.isPending ? "Creating…" : "Create " + kind + " trigger"}
             </button>
           </form>
 
-          {/* Secret card — shown once after creation */}
-          {newTrigger && newTrigger.kind === "webhook" && (
+          {/* Post-creation info card */}
+          {newTrigger && (
             <div className="trigger-secret-card">
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-                Webhook created — save these now
+                {newTrigger.kind === "webhook" && "Webhook created — save these now"}
+                {newTrigger.kind === "email" && "Email trigger created"}
+                {newTrigger.kind === "schedule" && "Schedule trigger created"}
               </div>
-              <CopyField
-                label="Webhook URL (POST here)"
-                value={`${window.location.origin}${newTrigger.webhook_url}`}
-              />
-              {newTrigger.secret && (
-                <CopyField
-                  label="Signing secret (X-Signature: sha256=<hmac>)"
-                  value={newTrigger.secret}
-                />
+
+              {newTrigger.kind === "webhook" && (
+                <>
+                  <CopyField
+                    label="Webhook URL (POST here)"
+                    value={`${window.location.origin}${newTrigger.webhook_url}`}
+                  />
+                  {newTrigger.secret && (
+                    <CopyField
+                      label="Signing secret (X-Signature: sha256=<hmac>)"
+                      value={newTrigger.secret}
+                    />
+                  )}
+                  <div className="trigger-secret-warn">
+                    ⚠ The secret is shown once. If you lose it, delete this trigger and create a new one.
+                  </div>
+                </>
               )}
-              <div className="trigger-secret-warn">
-                ⚠ The secret is shown once. If you lose it, delete this trigger and create a new one.
-              </div>
-              <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={() => setNewTrigger(null)}>
+
+              {newTrigger.kind === "email" && newTrigger.inbound_email && (
+                <>
+                  <CopyField
+                    label="Inbound email address"
+                    value={newTrigger.inbound_email}
+                  />
+                  <p style={{ fontSize: 12, color: "var(--dim)", margin: "8px 0 0" }}>
+                    Configure Resend or Postmark inbound routing to POST emails to{" "}
+                    <code style={{ fontSize: 11 }}>{window.location.origin}/api/inbound-email/{newTrigger.id}</code>
+                  </p>
+                </>
+              )}
+
+              {newTrigger.kind === "schedule" && newTrigger.cron_expression && (
+                <p style={{ fontSize: 13, color: "var(--text-2)" }}>
+                  Will fire on schedule: <code style={{ fontSize: 12 }}>{newTrigger.cron_expression}</code>
+                </p>
+              )}
+
+              <button className="btn btn-sm" style={{ marginTop: 10 }} onClick={() => setNewTrigger(null)}>
                 Done
               </button>
             </div>

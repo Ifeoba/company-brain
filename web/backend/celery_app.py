@@ -22,10 +22,15 @@ celery_app.conf.update(
     task_default_queue="runs",
     task_routes={
         "backend.tasks.execute_run_task": {"queue": "runs"},
+        "backend.tasks.check_scheduled_triggers": {"queue": "runs"},
         "backend.tasks.run_maintainer_for_brain": {"queue": "maintainer"},
         "backend.tasks.run_maintainer_for_all": {"queue": "maintainer"},
     },
     beat_schedule={
+        "check-schedules": {
+            "task": "backend.tasks.check_scheduled_triggers",
+            "schedule": 60.0,  # every minute
+        },
         "maintainer-daily": {
             "task": "backend.tasks.run_maintainer_for_all",
             "schedule": 86400.0,
