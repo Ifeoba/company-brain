@@ -7,7 +7,8 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .config import settings
 from .db import init_db
-from .routes import auth, brains, export, experts, interview, relationships, runs, settings as settings_routes, updates
+from . import sse
+from .routes import auth, brains, events, export, experts, interview, relationships, runs, settings as settings_routes, updates
 
 
 def create_app() -> FastAPI:
@@ -39,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(updates.router)
     app.include_router(relationships.router)
     app.include_router(runs.router)
+    app.include_router(events.router)
 
     # Serve built frontend from /static if it exists
     static_dir = Path(__file__).parent.parent / "static"
@@ -56,8 +58,10 @@ def create_app() -> FastAPI:
             return FileResponse(static_dir / "index.html")
 
     @app.on_event("startup")
-    def startup():
+    async def startup():
+        import asyncio
         init_db()
+        sse.set_loop(asyncio.get_event_loop())
 
     return app
 

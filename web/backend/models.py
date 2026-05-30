@@ -30,6 +30,52 @@ class User(Base):
     brains = relationship("Brain", back_populates="owner", cascade="all, delete-orphan")
 
 
+class Workspace(Base):
+    __tablename__ = "workspaces"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    name = Column(String(256), nullable=False)
+    owner_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    owner = relationship("User")
+    members = relationship("WorkspaceMember", back_populates="workspace", cascade="all, delete-orphan")
+    vault_secrets = relationship("VaultSecret", back_populates="workspace", cascade="all, delete-orphan")
+
+
+class WorkspaceMember(Base):
+    __tablename__ = "workspace_members"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    role = Column(String(16), nullable=False, default="viewer")  # owner|admin|reviewer|viewer
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("workspace_id", "user_id", name="uq_workspace_member"),)
+
+    workspace = relationship("Workspace", back_populates="members")
+    user = relationship("User")
+
+
+class VaultSecret(Base):
+    """Encrypted secrets per workspace. Plaintext never leaves the Celery worker."""
+    __tablename__ = "vault_secrets"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    name = Column(String(128), nullable=False)  # e.g. "slack_token", "anthropic_key"
+    encrypted_value = Column(LargeBinary, nullable=False)
+    created_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("workspace_id", "name", name="uq_vault_secret"),)
+
+    workspace = relationship("Workspace", back_populates="vault_secrets")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+
+
 class Brain(Base):
     __tablename__ = "brains"
 
@@ -37,12 +83,14 @@ class Brain(Base):
     slug = Column(String(128), nullable=False)
     name = Column(String(256), nullable=False)
     owner_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (UniqueConstraint("owner_id", "slug", name="uq_brain_owner_slug"),)
 
     owner = relationship("User", back_populates="brains")
+    workspace = relationship("Workspace")
     files = relationship("BrainFile", back_populates="brain", cascade="all, delete-orphan")
     interview_state = relationship("InterviewState", back_populates="brain", uselist=False, cascade="all, delete-orphan")
     collaborators = relationship("Collaborator", back_populates="brain", cascade="all, delete-orphan")
@@ -167,6 +215,61 @@ class BrainRelationship(Base):
     to_brain = relationship("Brain", foreign_keys=[to_brain_id])
 
 
+# ── Triggers ──────────────────────────────────────────────────────────────────
+
+class Trigger(Base):
+    __tablename__ = "triggers"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    kind = Column(String(16), nullable=False)  # webhook|email|schedule|database|manual
+    name = Column(String(256), nullable=False)
+    config = Column(Text, default="{}")  # JSON
+    secret = Column(String(64), nullable=True)
+    inbound_email = Column(String(256), nullable=True)
+    cron_expression = Column(String(64), nullable=True)
+    is_active = Column(Boolean, default=True)
+    last_fired_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    workspace = relationship("Workspace")
+    brain = relationship("Brain")
+    runs = relationship("Run", back_populates="trigger")
+
+
+# ── Tools ─────────────────────────────────────────────────────────────────────
+
+class Tool(Base):
+    __tablename__ = "tools"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    name = Column(String(64), nullable=False)  # e.g. "send_slack_message"
+    description = Column(Text, default="")
+    category = Column(String(32), nullable=False)  # messaging|database|email|webhook|http
+    risk = Column(String(16), nullable=False)  # safe|confirm|escalate
+    config = Column(Text, default="{}")  # JSON, references vault secret names
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    workspace = relationship("Workspace")
+    brain_tools = relationship("BrainTool", back_populates="tool")
+
+
+class BrainTool(Base):
+    __tablename__ = "brain_tools"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    tool_id = Column(String(36), ForeignKey("tools.id"), nullable=False)
+
+    __table_args__ = (UniqueConstraint("brain_id", "tool_id", name="uq_brain_tool"),)
+
+    brain = relationship("Brain")
+    tool = relationship("Tool", back_populates="brain_tools")
+
+
 # ── Runtime (Tier 3) ──────────────────────────────────────────────────────────
 
 class Run(Base):
@@ -175,21 +278,70 @@ class Run(Base):
     id = Column(String(36), primary_key=True, default=_uuid)
     brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=True)
+    trigger_id = Column(String(36), ForeignKey("triggers.id"), nullable=True)
     case_text = Column(Text, nullable=False)
     case_filename = Column(String(256), nullable=True)
+    dedup_key = Column(String(128), nullable=True)  # idempotency key per trigger
     decision_text = Column(Text, nullable=True)
     cited_rules = Column(Text, default="[]")  # JSON array of strings
     model_used = Column(String(128), nullable=False, default="")
     tokens_in = Column(Integer, default=0)
     tokens_out = Column(Integer, default=0)
-    status = Column(String(16), default="pending")  # pending | completed | failed
+    status = Column(String(20), default="pending")  # pending|queued|running|awaiting_approval|completed|failed
     error_text = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
     brain = relationship("Brain")
     user = relationship("User")
+    workspace = relationship("Workspace")
+    trigger = relationship("Trigger", back_populates="runs")
     review = relationship("Review", back_populates="run", uselist=False, cascade="all, delete-orphan")
+    tool_calls = relationship("ToolCall", back_populates="run", cascade="all, delete-orphan")
+    escalations = relationship("Escalation", back_populates="run", cascade="all, delete-orphan")
+
+
+class ToolCall(Base):
+    __tablename__ = "tool_calls"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    run_id = Column(String(36), ForeignKey("runs.id"), nullable=False)
+    tool_id = Column(String(36), ForeignKey("tools.id"), nullable=False)
+    arguments = Column(Text, default="{}")  # JSON
+    status = Column(String(20), nullable=False, default="pending_approval")  # pending_approval|approved|executed|failed|denied
+    result = Column(Text, nullable=True)  # JSON
+    error = Column(Text, nullable=True)
+    approver_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    requested_at = Column(DateTime, default=datetime.utcnow)
+    decided_at = Column(DateTime, nullable=True)
+    executed_at = Column(DateTime, nullable=True)
+
+    run = relationship("Run", back_populates="tool_calls")
+    tool = relationship("Tool")
+    approver = relationship("User", foreign_keys=[approver_user_id])
+    escalation = relationship("Escalation", back_populates="tool_call", uselist=False)
+
+
+class Escalation(Base):
+    __tablename__ = "escalations"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    run_id = Column(String(36), ForeignKey("runs.id"), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    reason = Column(Text, nullable=False)
+    guardrail_cited = Column(String(256), nullable=True)
+    tool_call_id = Column(String(36), ForeignKey("tool_calls.id"), nullable=True)
+    assigned_to_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    status = Column(String(16), nullable=False, default="pending")  # pending|resolved
+    resolution = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    run = relationship("Run", back_populates="escalations")
+    workspace = relationship("Workspace")
+    tool_call = relationship("ToolCall", back_populates="escalation")
+    assigned_to = relationship("User", foreign_keys=[assigned_to_user_id])
 
 
 class Review(Base):
@@ -214,6 +366,7 @@ class GeneratedEval(Base):
     id = Column(String(36), primary_key=True, default=_uuid)
     review_id = Column(String(36), ForeignKey("reviews.id"), nullable=False, unique=True)
     brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=True)
     case_text = Column(Text, nullable=False)
     expected_outcome = Column(Text, nullable=False)
     difficulty = Column(String(32), default="edge")
@@ -223,3 +376,43 @@ class GeneratedEval(Base):
 
     review = relationship("Review", back_populates="generated_eval")
     brain = relationship("Brain")
+
+
+# ── Maintainer ────────────────────────────────────────────────────────────────
+
+class MaintainerSuggestion(Base):
+    __tablename__ = "maintainer_suggestions"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=False)
+    brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    pattern_type = Column(String(64), nullable=False)  # recurring_escalation|drifting_eval|silent_corrections|untouched_brain|quiet_brain
+    finding = Column(Text, nullable=False)
+    proposed_diff = Column(Text, nullable=True)
+    target_file = Column(String(128), nullable=True)
+    status = Column(String(16), nullable=False, default="pending")  # pending|accepted|dismissed
+    accepted_by_user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime, nullable=True)
+
+    workspace = relationship("Workspace")
+    brain = relationship("Brain")
+    accepted_by = relationship("User", foreign_keys=[accepted_by_user_id])
+
+
+# ── Audit ─────────────────────────────────────────────────────────────────────
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    workspace_id = Column(String(36), ForeignKey("workspaces.id"), nullable=True)
+    actor_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    action = Column(String(64), nullable=False)
+    resource_type = Column(String(64), nullable=False)
+    resource_id = Column(String(36), nullable=True)
+    details_json = Column(Text, default="{}")
+    occurred_at = Column(DateTime, default=datetime.utcnow)
+
+    workspace = relationship("Workspace")
+    actor = relationship("User")

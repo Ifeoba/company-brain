@@ -23,5 +23,9 @@ class Settings(BaseSettings):
 
     claude_model: str = "claude-haiku-4-5-20251001"
 
+    # Queue / async
+    redis_url: str = "redis://localhost:6379/0"
+    run_daily_cap: int = 50
+
 
 settings = Settings()
