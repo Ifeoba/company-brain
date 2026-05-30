@@ -463,8 +463,168 @@ def check_scheduled_triggers() -> None:
 
 @celery_app.task(name="backend.tasks.run_maintainer_for_brain")
 def run_maintainer_for_brain(brain_id: str) -> None:
-    """Analyze one brain and create MaintainerSuggestion rows. Week 7 implementation."""
-    pass
+    """Analyze one brain and create MaintainerSuggestion rows for detected patterns."""
+    from datetime import timedelta
+    from collections import Counter
+    from .models import Brain, BrainTool, Escalation, MaintainerSuggestion, Review, Run, ToolCall, User
+
+    with session_scope() as db:
+        brain = db.query(Brain).filter_by(id=brain_id).first()
+        if not brain:
+            return
+
+        owner = db.query(User).filter_by(id=brain.owner_id).first()
+        if not owner or not owner.encrypted_anthropic_key:
+            return
+
+        now = datetime.utcnow()
+        window = now - timedelta(days=30)
+
+        recent_runs = (
+            db.query(Run)
+            .filter(Run.brain_id == brain_id, Run.created_at >= window)
+            .all()
+        )
+        run_ids = [r.id for r in recent_runs]
+
+        findings = []  # list of {pattern_type, finding, target_file}
+
+        # ── Pattern 1: recurring escalations ──────────────────────────────
+        if run_ids:
+            escs = db.query(Escalation).filter(Escalation.run_id.in_(run_ids)).all()
+            tool_counts: Counter = Counter()
+            for e in escs:
+                if e.tool_call and e.tool_call.tool:
+                    tool_counts[e.tool_call.tool.name] += 1
+            for tool_name, count in tool_counts.items():
+                if count >= 3:
+                    findings.append({
+                        "pattern_type": "recurring_escalation",
+                        "finding": (
+                            "The '{}' action has been escalated {} times in the last 30 days. "
+                            "Consider codifying when it should run automatically vs require review."
+                        ).format(tool_name, count),
+                        "target_file": "05-guardrails.md",
+                    })
+
+        # ── Pattern 2: repeated corrections ───────────────────────────────
+        if run_ids:
+            corrections = (
+                db.query(Review)
+                .filter(Review.run_id.in_(run_ids), Review.verdict == "corrected")
+                .all()
+            )
+            if len(corrections) >= 3:
+                snippets = [
+                    (c.corrected_decision or "")[:80]
+                    for c in corrections[:3]
+                    if c.corrected_decision
+                ]
+                findings.append({
+                    "pattern_type": "repeated_corrections",
+                    "finding": (
+                        "This brain was corrected {} times in the last 30 days. "
+                        "Sample corrections: {}. The decision rules may be missing key cases."
+                    ).format(len(corrections), " | ".join(snippets)),
+                    "target_file": "03-decision-rules.md",
+                })
+
+        # ── Pattern 3: high rejection/correction rate ──────────────────────
+        if run_ids:
+            reviewed = [r for r in recent_runs if r.status == "completed" and r.review]
+            if len(reviewed) >= 5:
+                bad = [r for r in reviewed if r.review.verdict in ("rejected", "corrected")]
+                rate = len(bad) / len(reviewed)
+                if rate >= 0.4:
+                    findings.append({
+                        "pattern_type": "drifting_eval",
+                        "finding": (
+                            "{}% of reviewed decisions were corrected or rejected "
+                            "({}/{} runs). The brain's rules may be drifting from reality."
+                        ).format(int(rate * 100), len(bad), len(reviewed)),
+                        "target_file": "03-decision-rules.md",
+                    })
+
+        # ── Pattern 4: quiet brain ─────────────────────────────────────────
+        if not recent_runs:
+            any_run = db.query(Run).filter_by(brain_id=brain_id).first()
+            if any_run:
+                findings.append({
+                    "pattern_type": "quiet_brain",
+                    "finding": (
+                        "This brain hasn't been used in over 30 days. "
+                        "It may need reviewing to ensure it still reflects current practice."
+                    ),
+                    "target_file": "01-service-definition.md",
+                })
+
+        if not findings:
+            return
+
+        # Deduplicate: skip pattern types that already have a pending suggestion
+        existing_patterns = {
+            s.pattern_type
+            for s in db.query(MaintainerSuggestion)
+            .filter_by(brain_id=brain_id, status="pending")
+            .all()
+        }
+        new_findings = [f for f in findings if f["pattern_type"] not in existing_patterns]
+        if not new_findings:
+            return
+
+        # Generate proposed diffs via LLM
+        brain_content = _assemble_brain(brain_id, db)
+        try:
+            from .llm_client import PROVIDERS
+            from .crypto import decrypt_key
+            import anthropic as _anthropic
+            api_key = decrypt_key(owner.encrypted_anthropic_key)
+            client = _anthropic.Anthropic(api_key=api_key)
+            provider = owner.llm_provider or "anthropic"
+            model = PROVIDERS.get(provider, PROVIDERS["anthropic"])["default_model"]
+        except Exception:
+            return
+
+        for f in new_findings:
+            try:
+                prompt = (
+                    "You are a brain maintainer. Given the brain content below and a detected pattern, "
+                    "propose a specific, concrete improvement.\n\n"
+                    "BRAIN CONTENT (excerpt):\n{brain}\n\n"
+                    "DETECTED PATTERN:\n{finding}\n\n"
+                    "TARGET FILE: {target_file}\n\n"
+                    "Write ONLY the specific markdown text to append to {target_file}. "
+                    "Start your response with exactly: APPEND TO {target_file}:\n\n"
+                    "Then write the rule, guardrail, or update to add."
+                ).format(
+                    brain=brain_content[:3000],
+                    finding=f["finding"],
+                    target_file=f["target_file"],
+                )
+
+                resp = client.messages.create(
+                    model=model,
+                    max_tokens=512,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                proposed_diff = resp.content[0].text.strip()
+            except Exception:
+                proposed_diff = "APPEND TO {}:\n\n<!-- Maintainer: review finding: {} -->".format(
+                    f["target_file"], f["finding"][:200]
+                )
+
+            db.add(MaintainerSuggestion(
+                workspace_id=brain.workspace_id,
+                brain_id=brain_id,
+                pattern_type=f["pattern_type"],
+                finding=f["finding"],
+                proposed_diff=proposed_diff,
+                target_file=f["target_file"],
+                status="pending",
+                created_at=now,
+            ))
+
+        db.commit()
 
 
 @celery_app.task(name="backend.tasks.run_maintainer_for_all")

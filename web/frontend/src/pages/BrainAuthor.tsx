@@ -4,11 +4,12 @@ import {
   useAddRelationship, useBrain, useBrainRelationships, useBrainUpdates,
   useCollaborators, useDismissUpdate, useExpertQuestions, useExport,
   useGetUpdateLink, useInterview, useIntegrateUpdate, useMe, useReadiness,
-  useRemoveRelationship, useSemanticReview, useSyncEvals, useUnsyncedCount,
+  useRemoveRelationship, useSemanticReview, useSuggestions, useSyncEvals, useUnsyncedCount,
 } from "../api/hooks";
 import TriggersModal from "../components/TriggersModal";
 import ToolsModal from "../components/ToolsModal";
 import VaultModal from "../components/VaultModal";
+import SuggestionsPanel from "../components/SuggestionsPanel";
 import { useBrains } from "../api/hooks";
 import AskExpertModal from "../components/AskExpertModal";
 import Avatar from "../components/Avatar";
@@ -57,6 +58,10 @@ export default function BrainAuthor() {
   const [showTriggers, setShowTriggers] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [showVault, setShowVault] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  const { data: suggestions = [] } = useSuggestions(slug!);
+  const pendingSuggestions = suggestions.filter((s) => s.status === "pending").length;
 
   if (!brain || !interview) {
     return (
@@ -118,6 +123,11 @@ export default function BrainAuthor() {
               disabled={syncEvals.isPending}
             >
               {syncEvals.isPending ? "Syncing…" : `Sync ${unsyncedCount} eval${unsyncedCount !== 1 ? "s" : ""}`}
+            </button>
+          )}
+          {pendingSuggestions > 0 && (
+            <button className="btn btn-sm btn-ghost text-accent" onClick={() => setShowSuggestions(true)}>
+              {pendingSuggestions} suggestion{pendingSuggestions !== 1 ? "s" : ""}
             </button>
           )}
           <button className="btn btn-sm" onClick={() => setShowTriggers(true)}>
@@ -373,6 +383,9 @@ export default function BrainAuthor() {
 
       {showVault && (
         <VaultModal onClose={() => setShowVault(false)} />
+      )}
+      {showSuggestions && (
+        <SuggestionsPanel slug={slug!} onClose={() => setShowSuggestions(false)} />
       )}
     </div>
   );

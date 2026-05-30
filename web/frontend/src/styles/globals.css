@@ -626,3 +626,10 @@
 .audit-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--hairline); }
 .audit-row:last-child { border-bottom: none; }
 .audit-detail { flex: 1; }
+
+/* ── Suggestions panel (maintainer) ──────────────────────── */
+.suggestions-modal { width: 560px; max-width: 95vw; max-height: 85vh; overflow-y: auto; }
+.suggestion-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.suggestion-card { border: 1px solid var(--border); border-radius: 6px; padding: 14px; background: var(--panel); }
+.suggestion-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.suggestion-diff { background: var(--bg-2); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; font-family: var(--font-mono); font-size: 11px; white-space: pre-wrap; word-break: break-word; margin: 0; max-height: 200px; overflow-y: auto; }

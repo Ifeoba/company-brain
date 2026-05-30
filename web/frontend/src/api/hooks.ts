@@ -4,7 +4,7 @@ import { api, apiBlob } from "./client";
 import type {
   AuditLogEntry, BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
   BuiltinTool, Collaborator, EscalationOut, ExpertQuestion, FileContent, FileSummary, InterviewState,
-  ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
+  MaintainerSuggestionOut, ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
   RunListItem, RunOut, SemanticReviewOut, ToolCallOut, ToolOut, TriggerOut, User, VaultSecretSummary, WorkspaceNode,
 } from "../types";
 
@@ -627,6 +627,45 @@ export function useDeleteSecret() {
     mutationFn: (name: string) =>
       api(`/api/workspace/vault/${encodeURIComponent(name)}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vault-secrets"] }),
+  });
+}
+
+// ── Maintainer suggestions ────────────────────────────────────────────────────
+
+export function useSuggestions(slug: string) {
+  return useQuery<MaintainerSuggestionOut[]>({
+    queryKey: ["suggestions", slug],
+    queryFn: () => api(`/api/brains/${slug}/suggestions`),
+    enabled: !!slug,
+  });
+}
+
+export function useAcceptSuggestion(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (suggestionId: string) =>
+      api(`/api/brains/${slug}/suggestions/${suggestionId}/accept`, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["suggestions", slug] });
+      qc.invalidateQueries({ queryKey: ["files", slug] });
+      qc.invalidateQueries({ queryKey: ["readiness", slug] });
+    },
+  });
+}
+
+export function useDismissSuggestion(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (suggestionId: string) =>
+      api(`/api/brains/${slug}/suggestions/${suggestionId}/dismiss`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["suggestions", slug] }),
+  });
+}
+
+export function useTriggerMaintainer(slug: string) {
+  return useMutation({
+    mutationFn: () =>
+      api(`/api/brains/${slug}/suggestions/trigger`, { method: "POST" }),
   });
 }
 

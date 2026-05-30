@@ -242,6 +242,19 @@ export interface VaultSecretSummary {
   updated_at: string;
 }
 
+// ── Maintainer suggestions ────────────────────────────────────────────────────
+
+export interface MaintainerSuggestionOut {
+  id: string;
+  pattern_type: string;
+  finding: string;
+  proposed_diff: string | null;
+  target_file: string | null;
+  status: "pending" | "accepted" | "dismissed";
+  created_at: string;
+  resolved_at: string | null;
+}
+
 // ── Escalations ───────────────────────────────────────────────────────────────
 
 export interface EscalationToolCall {
