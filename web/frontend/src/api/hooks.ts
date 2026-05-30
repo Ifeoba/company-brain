@@ -2,10 +2,11 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "./client";
 import type {
-  AuditLogEntry, BrainDetail, BrainRelationship, BrainStatsOut, BrainSummary, BrainUpdate, BrainUpdateLink,
+  AuditLogEntry, BrainActivityOut, BrainDetail, BrainRelationship, BrainStatsOut, BrainSummary, BrainUpdate, BrainUpdateLink,
   BuiltinTool, Collaborator, EscalationOut, ExpertQuestion, FileContent, FileSummary, InterviewState,
   MaintainerSuggestionOut, ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
-  RunListItem, RunOut, RunTraceOut, SemanticReviewOut, ToolCallOut, ToolOut, TriggerOut, User, VaultSecretSummary, WorkspaceNode,
+  RunListItem, RunOut, RunTraceOut, SemanticReviewOut, ToolCallOut, ToolOut, TriggerOut, User, VaultSecretSummary,
+  WorkspaceDashboardOut, WorkspaceNode,
 } from "../types";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -713,6 +714,26 @@ export function useResolveEscalation() {
       qc.invalidateQueries({ queryKey: ["runs"] });
       qc.invalidateQueries({ queryKey: ["run"] });
     },
+  });
+}
+
+// ── Activity (Layer 2) ────────────────────────────────────────────────────────
+
+export function useBrainActivity(slug: string) {
+  return useQuery<BrainActivityOut>({
+    queryKey: ["brain-activity", slug],
+    queryFn: () => api(`/api/brains/${slug}/activity`),
+    enabled: !!slug,
+    staleTime: 60000,
+  });
+}
+
+export function useWorkspaceDashboard() {
+  return useQuery<WorkspaceDashboardOut>({
+    queryKey: ["workspace-dashboard"],
+    queryFn: () => api("/api/workspace/dashboard"),
+    staleTime: 60000,
+    refetchInterval: 120000,
   });
 }
 

@@ -242,6 +242,39 @@ export interface VaultSecretSummary {
   updated_at: string;
 }
 
+// ── Activity (Layer 2) ────────────────────────────────────────────────────────
+
+export interface DailyBrainStatsOut {
+  date: string;
+  runs_total: number;
+  runs_auto_completed: number;
+  runs_escalated: number;
+  runs_failed: number;
+  cost_cents: number;
+  median_duration_ms: number;
+}
+
+export interface BrainActivityOut {
+  brain_name: string;
+  days: DailyBrainStatsOut[];
+}
+
+export interface BrainDashItem {
+  slug: string;
+  runs_today: number;
+  failed_today: number;
+  pending_escalations: number;
+  sparkline: number[];
+}
+
+export interface WorkspaceDashboardOut {
+  total_brains: number;
+  total_runs_today: number;
+  pending_escalations: number;
+  total_cost_usd_today: number;
+  brains: BrainDashItem[];
+}
+
 // ── Brain stats ───────────────────────────────────────────────────────────────
 
 export interface BrainStatsOut {

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useBrains, useCreateBrain, useDeleteBrain, useEscalations } from "../api/hooks";
+import { useBrains, useCreateBrain, useDeleteBrain, useEscalations, useWorkspaceDashboard } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
+import MiniSparkline from "../components/MiniSparkline";
 import EscalationsModal from "../components/EscalationsModal";
 import AuditLogModal from "../components/AuditLogModal";
-import type { BrainSummary } from "../types";
+import type { BrainDashItem, BrainSummary } from "../types";
 
 function NewBrainModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("");
@@ -112,6 +113,7 @@ function statusInfo(status: BrainSummary["status"]): { cls: string; label: strin
 export default function BrainsList() {
   const { data: brains = [], isLoading } = useBrains();
   const { data: escalations = [] } = useEscalations();
+  const { data: dash } = useWorkspaceDashboard();
   const [showNew, setShowNew] = useState(false);
   const [deletingBrain, setDeletingBrain] = useState<BrainSummary | null>(null);
   const [showEscalations, setShowEscalations] = useState(false);
@@ -119,6 +121,14 @@ export default function BrainsList() {
   const navigate = useNavigate();
 
   const pendingEscalations = escalations.filter((e) => e.status === "pending").length;
+
+  // Build a slug → dash item lookup for sparklines + today stats
+  const dashBySlug: Record<string, BrainDashItem> = {};
+  if (dash) {
+    for (const item of dash.brains) {
+      dashBySlug[item.slug] = item;
+    }
+  }
 
   return (
     <div className="bl-shell">
@@ -142,6 +152,33 @@ export default function BrainsList() {
               <Icon name="plus" size={12} /> New brain
             </button>
           </div>
+
+          {/* Hero stats */}
+          {dash && (
+            <div className="dash-hero">
+              <div className="dash-tile">
+                <div className="dash-tile-val">{dash.total_runs_today}</div>
+                <div className="dash-tile-label dim">Runs today</div>
+              </div>
+              <div className="dash-tile">
+                <div className="dash-tile-val"
+                  style={{ color: dash.pending_escalations > 0 ? "var(--warn)" : undefined }}>
+                  {dash.pending_escalations}
+                </div>
+                <div className="dash-tile-label dim">Pending escalations</div>
+              </div>
+              <div className="dash-tile">
+                <div className="dash-tile-val">
+                  ${dash.total_cost_usd_today > 0 ? dash.total_cost_usd_today.toFixed(4) : "0.00"}
+                </div>
+                <div className="dash-tile-label dim">Cost today</div>
+              </div>
+              <div className="dash-tile">
+                <div className="dash-tile-val">{dash.total_brains}</div>
+                <div className="dash-tile-label dim">Brains</div>
+              </div>
+            </div>
+          )}
 
           {pendingEscalations > 0 && (
             <div className="escalation-banner" onClick={() => setShowEscalations(true)}>
@@ -168,6 +205,7 @@ export default function BrainsList() {
                 <span>Brain</span>
                 <span>Completeness</span>
                 <span>Status</span>
+                <span>Last 7 days</span>
                 <span>Last updated</span>
                 <span />
               </div>
@@ -178,6 +216,9 @@ export default function BrainsList() {
                   : b.readiness_score >= 50
                   ? "var(--warn)"
                   : "var(--bad)";
+                const dashItem = dashBySlug[b.slug];
+                const hasFailed = (dashItem?.failed_today ?? 0) > 0;
+                const hasPendingEsc = (dashItem?.pending_escalations ?? 0) > 0;
                 return (
                   <div
                     key={b.id}
@@ -186,6 +227,23 @@ export default function BrainsList() {
                   >
                     <div>
                       <div className="bl-brain-name">{b.name}</div>
+                      <div className="bl-brain-meta">
+                        {dashItem && dashItem.runs_today > 0 && (
+                          <span className="dim" style={{ fontSize: 11 }}>
+                            {dashItem.runs_today} run{dashItem.runs_today !== 1 ? "s" : ""} today
+                          </span>
+                        )}
+                        {hasFailed && (
+                          <span style={{ fontSize: 11, color: "var(--bad)" }}>
+                            {dashItem.failed_today} failed
+                          </span>
+                        )}
+                        {hasPendingEsc && (
+                          <span style={{ fontSize: 11, color: "var(--warn)" }}>
+                            {dashItem.pending_escalations} escalation{dashItem.pending_escalations !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="bl-readiness">
                       <span>{b.readiness_score}</span>
@@ -203,16 +261,32 @@ export default function BrainsList() {
                         {label}
                       </span>
                     </div>
+                    <div className="bl-sparkline">
+                      {dashItem ? (
+                        <MiniSparkline data={dashItem.sparkline} width={56} height={20} />
+                      ) : (
+                        <svg width={56} height={20} />
+                      )}
+                    </div>
                     <span className="dim" style={{ fontSize: 12.5 }}>
                       {new Date(b.updated_at).toLocaleDateString()}
                     </span>
-                    <button
-                      className="btn btn-sm btn-ghost bl-delete-btn"
-                      title="Delete brain"
-                      onClick={(e) => { e.stopPropagation(); setDeletingBrain(b); }}
-                    >
-                      <Icon name="trash" size={13} />
-                    </button>
+                    <div className="bl-row-actions" onClick={(e) => e.stopPropagation()}>
+                      <Link
+                        to={`/brains/${b.slug}/activity`}
+                        className="btn btn-sm btn-ghost"
+                        title="Activity"
+                      >
+                        Activity
+                      </Link>
+                      <button
+                        className="btn btn-sm btn-ghost bl-delete-btn"
+                        title="Delete brain"
+                        onClick={() => setDeletingBrain(b)}
+                      >
+                        <Icon name="trash" size={13} />
+                      </button>
+                    </div>
                   </div>
                 );
               })}

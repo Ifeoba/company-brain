@@ -361,6 +361,26 @@ class Review(Base):
     generated_eval = relationship("GeneratedEval", back_populates="review", uselist=False, cascade="all, delete-orphan")
 
 
+# ── Daily brain stats (activity aggregation) ─────────────────────────────────
+
+class DailyBrainStats(Base):
+    __tablename__ = "daily_brain_stats"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    brain_id = Column(String(36), ForeignKey("brains.id"), nullable=False)
+    date = Column(String(10), nullable=False)  # YYYY-MM-DD
+    runs_total = Column(Integer, default=0)
+    runs_auto_completed = Column(Integer, default=0)
+    runs_escalated = Column(Integer, default=0)
+    runs_failed = Column(Integer, default=0)
+    cost_cents = Column(Integer, default=0)
+    median_duration_ms = Column(Integer, default=0)
+
+    __table_args__ = (UniqueConstraint("brain_id", "date", name="uq_daily_brain_stats"),)
+
+    brain = relationship("Brain")
+
+
 # ── Run trace ─────────────────────────────────────────────────────────────────
 
 class RunStep(Base):

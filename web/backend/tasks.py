@@ -700,6 +700,74 @@ def run_maintainer_for_brain(brain_id: str) -> None:
         db.commit()
 
 
+@celery_app.task(name="backend.tasks.aggregate_daily_stats")
+def aggregate_daily_stats() -> None:
+    """
+    Upserts DailyBrainStats for today across all brains.
+    Runs every 5 minutes via beat — always rewrites today's row so it stays current.
+    """
+    from .models import Brain, DailyBrainStats, Escalation, Run
+
+    _IN = 3.0
+    _OUT = 15.0
+
+    with session_scope() as db:
+        today = datetime.utcnow().date().isoformat()
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        for brain in db.query(Brain).all():
+            runs = (
+                db.query(Run)
+                .filter(Run.brain_id == brain.id, Run.created_at >= today_start)
+                .all()
+            )
+            run_ids = [r.id for r in runs]
+
+            escalated_run_ids = set()
+            if run_ids:
+                escs = db.query(Escalation.run_id).filter(Escalation.run_id.in_(run_ids)).all()
+                escalated_run_ids = {e.run_id for e in escs}
+
+            runs_total = len(runs)
+            runs_failed = sum(1 for r in runs if r.status == "failed")
+            runs_escalated = len(escalated_run_ids)
+            runs_auto_completed = sum(
+                1 for r in runs
+                if r.status == "completed" and r.id not in escalated_run_ids
+            )
+            cost_cents = int(sum(
+                (r.tokens_in / 1_000_000) * _IN + (r.tokens_out / 1_000_000) * _OUT
+                for r in runs
+            ) * 100)
+
+            durations = sorted(
+                int((r.completed_at - r.created_at).total_seconds() * 1000)
+                for r in runs
+                if r.completed_at and r.created_at
+            )
+            median_ms = durations[len(durations) // 2] if durations else 0
+
+            existing = db.query(DailyBrainStats).filter_by(brain_id=brain.id, date=today).first()
+            if existing:
+                existing.runs_total = runs_total
+                existing.runs_auto_completed = runs_auto_completed
+                existing.runs_escalated = runs_escalated
+                existing.runs_failed = runs_failed
+                existing.cost_cents = cost_cents
+                existing.median_duration_ms = median_ms
+            else:
+                db.add(DailyBrainStats(
+                    brain_id=brain.id,
+                    date=today,
+                    runs_total=runs_total,
+                    runs_auto_completed=runs_auto_completed,
+                    runs_escalated=runs_escalated,
+                    runs_failed=runs_failed,
+                    cost_cents=cost_cents,
+                    median_duration_ms=median_ms,
+                ))
+
+
 @celery_app.task(name="backend.tasks.run_maintainer_for_all")
 def run_maintainer_for_all() -> None:
     """Daily beat task: run the maintainer for every active brain."""
