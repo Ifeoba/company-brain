@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useBrain, useCreateRun, useReviewRun, useRun, useRunEvents, useRuns } from "../api/hooks";
+import { useApproveToolCall, useBrain, useCreateRun, useDenyToolCall, useReviewRun, useRun, useRunEvents, useRunToolCalls, useRuns } from "../api/hooks";
 import Icon from "../components/Icon";
-import type { RunListItem, RunOut } from "../types";
+import type { RunListItem, RunOut, ToolCallOut } from "../types";
 
 // ── Markdown renderer (minimal, no dependency) ────────────────────────────────
 function renderMarkdown(text: string): string {
@@ -92,6 +92,88 @@ function CorrectionModal({
   );
 }
 
+// ── Tool call approval panel ───────────────────────────────────────────────────
+function ArgList({ args }: { args: Record<string, unknown> }) {
+  const entries = Object.entries(args);
+  if (entries.length === 0) return null;
+  return (
+    <div className="tc-args">
+      {entries.map(([k, v]) => (
+        <div key={k} className="tc-arg-row">
+          <span className="tc-arg-key">{k}</span>
+          <span className="tc-arg-val">{typeof v === "string" ? v : JSON.stringify(v)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ApprovalPanel({ slug, run }: { slug: string; run: RunOut }) {
+  const { data: toolCalls = [], isLoading } = useRunToolCalls(slug, run.id);
+  const approve = useApproveToolCall(slug);
+  const deny = useDenyToolCall(slug);
+
+  if (isLoading) return null;
+
+  const hasPending = toolCalls.some((tc) => tc.status === "pending_approval");
+
+  return (
+    <div className="approval-panel">
+      <div className="approval-head">
+        <strong>Approval needed</strong>
+        <p className="dim" style={{ fontSize: 13, margin: "4px 0 0" }}>
+          This brain wants to take the following actions. Review each one and approve or deny — it will continue once you've decided.
+        </p>
+      </div>
+      <div className="tc-list">
+        {toolCalls.map((tc: ToolCallOut) => (
+          <div key={tc.id} className={`tc-card tc-${tc.status}`}>
+            <div className="tc-header">
+              <span className="tc-name">{tc.tool_name}</span>
+              {tc.status !== "pending_approval" && (
+                <span
+                  className={`pill ${tc.status === "executed" || tc.status === "approved" ? "ok" : "bad"}`}
+                  style={{ fontSize: 10 }}
+                >
+                  {tc.status === "executed" ? "Done" : tc.status === "approved" ? "Approved" : "Denied"}
+                </span>
+              )}
+            </div>
+            {tc.tool_description && (
+              <div className="tc-desc dim">{tc.tool_description}</div>
+            )}
+            <ArgList args={tc.arguments} />
+            {tc.status === "pending_approval" && (
+              <div className="tc-actions">
+                <button
+                  className="btn btn-sm"
+                  style={{ color: "var(--bad)" }}
+                  disabled={deny.isPending}
+                  onClick={() => deny.mutate({ runId: run.id, tcId: tc.id })}
+                >
+                  Deny
+                </button>
+                <button
+                  className="btn btn-sm btn-primary"
+                  disabled={approve.isPending}
+                  onClick={() => approve.mutate({ runId: run.id, tcId: tc.id })}
+                >
+                  Approve
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      {!hasPending && toolCalls.length > 0 && (
+        <p className="dim" style={{ fontSize: 12, marginTop: 10 }}>
+          All actions decided — finishing the run…
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ── Decision output ────────────────────────────────────────────────────────────
 function DecisionPanel({
   run,
@@ -123,6 +205,10 @@ function DecisionPanel({
         <span>Running… this usually takes 5–20 seconds</span>
       </div>
     );
+  }
+
+  if (run.status === "awaiting_approval") {
+    return null;
   }
 
   if (run.status === "failed") {
@@ -271,11 +357,18 @@ export default function RunPage() {
 
   const { data: activeRun } = useRun(slug!, activeRunId);
 
-  // SSE: invalidate immediately when a run completes, cutting polling latency to ~0
+  // SSE: invalidate immediately on run state changes, cutting polling latency to ~0
   useRunEvents((event) => {
-    if (event.type === "run.completed" || event.type === "run.failed") {
+    if (
+      event.type === "run.completed" ||
+      event.type === "run.failed" ||
+      event.type === "run.awaiting_approval"
+    ) {
       qc.invalidateQueries({ queryKey: ["run", slug, event.run_id as string] });
       qc.invalidateQueries({ queryKey: ["runs", slug] });
+      if (event.type === "run.awaiting_approval") {
+        qc.invalidateQueries({ queryKey: ["run-tool-calls", slug, event.run_id as string] });
+      }
     }
   });
 
@@ -360,6 +453,9 @@ export default function RunPage() {
             <div className="run-empty">
               <p>Paste a case and click Run. The brain will apply its decision rules and tell you what should happen — and why.</p>
             </div>
+          )}
+          {activeRun && activeRun.status === "awaiting_approval" && (
+            <ApprovalPanel slug={slug!} run={activeRun} />
           )}
           {activeRun && (
             <DecisionPanel run={activeRun} onReview={handleReview} />

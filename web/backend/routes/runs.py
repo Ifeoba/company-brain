@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
-from ..models import Brain, BrainFile, GeneratedEval, Review, Run, User
+from ..models import Brain, BrainFile, GeneratedEval, Review, Run, Tool, ToolCall, User
 from ..schemas import (
     CreateReviewRequest, CreateRunRequest, EvalSyncOut,
     RunListItem, RunOut, UnsyncedCountOut,
@@ -225,6 +225,117 @@ def create_review(
 
     db.commit()
     return {"ok": True, "verdict": body.verdict, "eval_created": body.verdict == "corrected"}
+
+
+# ── Tool call approval ────────────────────────────────────────────────────────
+
+def _tc_out(tc: ToolCall, tool: Tool) -> dict:
+    args = {}
+    try:
+        args = json.loads(tc.arguments or "{}")
+    except Exception:
+        pass
+    result = None
+    try:
+        result = json.loads(tc.result) if tc.result else None
+    except Exception:
+        pass
+    return {
+        "id": tc.id,
+        "tool_id": tc.tool_id,
+        "tool_name": tool.name if tool else "unknown",
+        "tool_description": tool.description if tool else "",
+        "arguments": args,
+        "status": tc.status,
+        "result": result,
+        "error": tc.error,
+        "requested_at": tc.requested_at.isoformat() if tc.requested_at else None,
+        "decided_at": tc.decided_at.isoformat() if tc.decided_at else None,
+        "executed_at": tc.executed_at.isoformat() if tc.executed_at else None,
+    }
+
+
+def _maybe_resume(run: Run, db: Session, background: BackgroundTasks) -> None:
+    """If all tool calls are decided, kick off the resume task."""
+    pending = db.query(ToolCall).filter_by(run_id=run.id, status="pending_approval").count()
+    if pending == 0:
+        try:
+            from ..tasks import resume_run_task
+            resume_run_task.delay(run.id)
+        except Exception:
+            from ..tasks import resume_run
+            background.add_task(resume_run, run.id)
+
+
+@router.get("/api/brains/{slug}/runs/{run_id}/tool-calls")
+def list_run_tool_calls(
+    slug: str,
+    run_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    brain = _get_brain(db, slug, user)
+    run = db.query(Run).filter_by(id=run_id, brain_id=brain.id, user_id=user.id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    tcs = db.query(ToolCall).filter_by(run_id=run.id).order_by(ToolCall.requested_at).all()
+    return [_tc_out(tc, db.query(Tool).filter_by(id=tc.tool_id).first()) for tc in tcs]
+
+
+@router.post("/api/brains/{slug}/runs/{run_id}/tool-calls/{tc_id}/approve")
+def approve_tool_call(
+    slug: str,
+    run_id: str,
+    tc_id: str,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    brain = _get_brain(db, slug, user)
+    run = db.query(Run).filter_by(id=run_id, brain_id=brain.id, user_id=user.id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    tc = db.query(ToolCall).filter_by(id=tc_id, run_id=run.id).first()
+    if not tc:
+        raise HTTPException(status_code=404, detail="Action not found")
+    if tc.status != "pending_approval":
+        raise HTTPException(status_code=409, detail="Already decided")
+
+    tc.status = "approved"
+    tc.approver_user_id = user.id
+    tc.decided_at = datetime.utcnow()
+    db.commit()
+
+    _maybe_resume(run, db, background)
+    return {"ok": True, "status": "approved"}
+
+
+@router.post("/api/brains/{slug}/runs/{run_id}/tool-calls/{tc_id}/deny")
+def deny_tool_call(
+    slug: str,
+    run_id: str,
+    tc_id: str,
+    background: BackgroundTasks,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    brain = _get_brain(db, slug, user)
+    run = db.query(Run).filter_by(id=run_id, brain_id=brain.id, user_id=user.id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    tc = db.query(ToolCall).filter_by(id=tc_id, run_id=run.id).first()
+    if not tc:
+        raise HTTPException(status_code=404, detail="Action not found")
+    if tc.status != "pending_approval":
+        raise HTTPException(status_code=409, detail="Already decided")
+
+    tc.status = "denied"
+    tc.approver_user_id = user.id
+    tc.decided_at = datetime.utcnow()
+    db.commit()
+
+    _maybe_resume(run, db, background)
+    return {"ok": True, "status": "denied"}
 
 
 @router.post("/api/brains/{slug}/evals/sync", response_model=EvalSyncOut)

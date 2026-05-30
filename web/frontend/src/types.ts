@@ -241,3 +241,19 @@ export interface VaultSecretSummary {
   name: string;
   updated_at: string;
 }
+
+// ── Tool calls (approval flow) ─────────────────────────────────────────────────
+
+export interface ToolCallOut {
+  id: string;
+  tool_id: string;
+  tool_name: string;
+  tool_description: string;
+  arguments: Record<string, unknown>;
+  status: "pending_approval" | "approved" | "executed" | "failed" | "denied";
+  result: Record<string, unknown> | null;
+  error: string | null;
+  requested_at: string;
+  decided_at: string | null;
+  executed_at: string | null;
+}

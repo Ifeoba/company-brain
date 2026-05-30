@@ -273,6 +273,118 @@ def execute_run_task(self, run_id: str) -> None:
         raise self.retry(exc=exc, countdown=2 ** self.request.retries)
 
 
+# ── Approval resume ────────────────────────────────────────────────────────────
+
+def resume_run(run_id: str) -> None:
+    """
+    Resume a run that was paused awaiting tool call approval.
+    Executes approved calls, notes denied ones, then asks the LLM for
+    a final decision that incorporates the outcomes.
+    """
+    from .models import Run, Tool, ToolCall, User
+    from .tool_executors import execute_tool
+
+    with session_scope() as db:
+        run = db.query(Run).filter_by(id=run_id).first()
+        if not run or run.status != "awaiting_approval":
+            return
+
+        # Ensure nothing is still pending
+        still_pending = db.query(ToolCall).filter_by(run_id=run.id, status="pending_approval").count()
+        if still_pending:
+            return
+
+        ws_id = run.workspace_id or run.user_id
+        run.status = "running"
+        db.flush()
+        sse.publish(ws_id, {"type": "run.started", "run_id": run_id})
+
+        try:
+            tool_calls = db.query(ToolCall).filter_by(run_id=run.id).order_by(ToolCall.requested_at).all()
+            outcomes = []
+
+            for tc in tool_calls:
+                tool = db.query(Tool).filter_by(id=tc.tool_id).first()
+                tool_label = tool.description or tool.name if tool else "action"
+
+                if tc.status == "approved":
+                    try:
+                        result = execute_tool(db, tc, tool, ws_id)
+                        tc.result = json.dumps(result)
+                        tc.status = "executed"
+                        tc.executed_at = datetime.utcnow()
+                        outcomes.append("- {} → approved and completed (result: {})".format(
+                            tool_label, json.dumps(result)
+                        ))
+                    except Exception as exc:
+                        tc.status = "failed"
+                        tc.error = str(exc)
+                        tc.executed_at = datetime.utcnow()
+                        outcomes.append("- {} → approved but failed: {}".format(tool_label, exc))
+                elif tc.status == "denied":
+                    outcomes.append("- {} → denied by the reviewer, not executed".format(tool_label))
+
+            db.flush()
+
+            user = db.query(User).filter_by(id=run.user_id).first()
+            from .llm_client import PROVIDERS
+            brain_content = _assemble_brain(run.brain_id, db)
+            system = RUN_SYSTEM_PROMPT.format(brain=brain_content)
+            provider = user.llm_provider or "anthropic"
+            model = PROVIDERS.get(provider, PROVIDERS["anthropic"])["default_model"]
+
+            resume_prompt = (
+                "CASE:\n\n{case}\n\n"
+                "---\n\n"
+                "The following actions were requested and reviewed by a human:\n"
+                "{outcomes}\n\n"
+                "Please provide your complete decision, taking these outcomes into account."
+            ).format(case=run.case_text, outcomes="\n".join(outcomes))
+
+            if provider == "anthropic":
+                import anthropic
+                from .crypto import decrypt_key
+                api_key = decrypt_key(user.encrypted_anthropic_key)
+                client = anthropic.Anthropic(api_key=api_key)
+                resp = client.messages.create(
+                    model=model,
+                    max_tokens=2048,
+                    system=system,
+                    messages=[{"role": "user", "content": resume_prompt}],
+                )
+                decision = resp.content[0].text
+                run.tokens_in = (run.tokens_in or 0) + resp.usage.input_tokens
+                run.tokens_out = (run.tokens_out or 0) + resp.usage.output_tokens
+            else:
+                from .llm_client import call_llm
+                decision = call_llm(
+                    user, system,
+                    [{"role": "user", "content": resume_prompt}],
+                    max_tokens=2048,
+                )
+
+            run.decision_text = decision
+            run.cited_rules = json.dumps(_extract_cited_rules(decision))
+            run.model_used = model
+            run.status = "completed"
+            run.completed_at = datetime.utcnow()
+            sse.publish(ws_id, {"type": "run.completed", "run_id": run_id, "status": "completed"})
+
+        except Exception as exc:
+            run.status = "failed"
+            run.error_text = str(exc)
+            run.completed_at = datetime.utcnow()
+            sse.publish(ws_id, {"type": "run.failed", "run_id": run_id, "error": run.error_text})
+
+
+@celery_app.task(name="backend.tasks.resume_run_task", bind=True, max_retries=3)
+def resume_run_task(self, run_id: str) -> None:
+    try:
+        resume_run(run_id)
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+
+
 # ── Schedule polling ──────────────────────────────────────────────────────────
 
 @celery_app.task(name="backend.tasks.check_scheduled_triggers")

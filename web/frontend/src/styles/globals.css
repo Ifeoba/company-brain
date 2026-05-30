@@ -587,3 +587,19 @@
 .trigger-toggle input:checked ~ .toggle-track::after { transform: translateX(13px); }
 
 .input-error { border-color: var(--bad) !important; }
+
+/* ── Approval panel (tool call review) ────────────────────── */
+.approval-panel { border: 1px solid var(--warn); border-radius: 8px; padding: 16px; margin-bottom: 16px; background: color-mix(in srgb, var(--warn) 6%, transparent); }
+.approval-head { margin-bottom: 14px; }
+.tc-list { display: flex; flex-direction: column; gap: 10px; }
+.tc-card { border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; background: var(--panel); }
+.tc-card.tc-pending_approval { border-color: var(--warn); }
+.tc-card.tc-denied { opacity: 0.55; }
+.tc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.tc-name { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--text); }
+.tc-desc { font-size: 12px; margin-bottom: 8px; }
+.tc-args { background: var(--bg-2); border-radius: 4px; padding: 8px 10px; margin-bottom: 10px; }
+.tc-arg-row { display: flex; gap: 10px; padding: 2px 0; }
+.tc-arg-key { font-family: var(--font-mono); font-size: 11px; color: var(--dimmer); min-width: 80px; flex-shrink: 0; }
+.tc-arg-val { font-family: var(--font-mono); font-size: 11px; color: var(--text); word-break: break-all; }
+.tc-actions { display: flex; gap: 8px; justify-content: flex-end; }

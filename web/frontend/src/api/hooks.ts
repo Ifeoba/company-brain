@@ -5,7 +5,7 @@ import type {
   BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
   BuiltinTool, Collaborator, ExpertQuestion, FileContent, FileSummary, InterviewState,
   ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
-  RunListItem, RunOut, SemanticReviewOut, ToolOut, TriggerOut, User, VaultSecretSummary, WorkspaceNode,
+  RunListItem, RunOut, SemanticReviewOut, ToolCallOut, ToolOut, TriggerOut, User, VaultSecretSummary, WorkspaceNode,
 } from "../types";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -627,5 +627,46 @@ export function useDeleteSecret() {
     mutationFn: (name: string) =>
       api(`/api/workspace/vault/${encodeURIComponent(name)}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vault-secrets"] }),
+  });
+}
+
+// ── Tool call approval ─────────────────────────────────────────────────────────
+
+export function useRunToolCalls(slug: string, runId: string | null) {
+  return useQuery<ToolCallOut[]>({
+    queryKey: ["run-tool-calls", slug, runId],
+    queryFn: () => api(`/api/brains/${slug}/runs/${runId}/tool-calls`),
+    enabled: !!slug && !!runId,
+    refetchInterval: (query) => {
+      const data = query.state.data as ToolCallOut[] | undefined;
+      if (!data) return 2000;
+      return data.some((tc) => tc.status === "pending_approval") ? 2000 : false;
+    },
+  });
+}
+
+export function useApproveToolCall(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, tcId }: { runId: string; tcId: string }) =>
+      api(`/api/brains/${slug}/runs/${runId}/tool-calls/${tcId}/approve`, { method: "POST" }),
+    onSuccess: (_, { runId }) => {
+      qc.invalidateQueries({ queryKey: ["run-tool-calls", slug, runId] });
+      qc.invalidateQueries({ queryKey: ["run", slug, runId] });
+      qc.invalidateQueries({ queryKey: ["runs", slug] });
+    },
+  });
+}
+
+export function useDenyToolCall(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, tcId }: { runId: string; tcId: string }) =>
+      api(`/api/brains/${slug}/runs/${runId}/tool-calls/${tcId}/deny`, { method: "POST" }),
+    onSuccess: (_, { runId }) => {
+      qc.invalidateQueries({ queryKey: ["run-tool-calls", slug, runId] });
+      qc.invalidateQueries({ queryKey: ["run", slug, runId] });
+      qc.invalidateQueries({ queryKey: ["runs", slug] });
+    },
   });
 }
