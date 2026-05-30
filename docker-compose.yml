@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: companybrain
+      POSTGRES_USER: cb
+      POSTGRES_PASSWORD: cb_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    command: uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./web:/app/web
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://cb:cb_dev@db:5432/companybrain
+      REDIS_URL: redis://redis:6379/0
+    env_file:
+      - ./web/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    command: celery -A backend.celery_app worker --loglevel=info -Q runs,maintainer -c 4
+    volumes:
+      - ./web:/app/web
+    environment:
+      DATABASE_URL: postgresql+psycopg://cb:cb_dev@db:5432/companybrain
+      REDIS_URL: redis://redis:6379/0
+    env_file:
+      - ./web/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    command: celery -A backend.celery_app beat --loglevel=info
+    volumes:
+      - ./web:/app/web
+    environment:
+      DATABASE_URL: postgresql+psycopg://cb:cb_dev@db:5432/companybrain
+      REDIS_URL: redis://redis:6379/0
+    env_file:
+      - ./web/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
