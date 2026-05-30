@@ -301,6 +301,22 @@ export interface AuditLogEntry {
   actor_id: string | null;
 }
 
+// ── Run trace ─────────────────────────────────────────────────────────────────
+
+export interface RunStepOut {
+  id: string;
+  step_index: number;
+  kind: "thinking" | "tool_call" | "approval_requested" | "approval_granted" | "tool_executed" | "tool_failed" | "guardrail_blocked" | "final_decision";
+  content: string | null;
+  metadata: Record<string, unknown>;
+  occurred_at: string | null;
+}
+
+export interface RunTraceOut {
+  run: RunOut;
+  steps: RunStepOut[];
+}
+
 // ── Tool calls (approval flow) ─────────────────────────────────────────────────
 
 export interface ToolCallOut {

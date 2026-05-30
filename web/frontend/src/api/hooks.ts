@@ -5,7 +5,7 @@ import type {
   AuditLogEntry, BrainDetail, BrainRelationship, BrainStatsOut, BrainSummary, BrainUpdate, BrainUpdateLink,
   BuiltinTool, Collaborator, EscalationOut, ExpertQuestion, FileContent, FileSummary, InterviewState,
   MaintainerSuggestionOut, ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
-  RunListItem, RunOut, SemanticReviewOut, ToolCallOut, ToolOut, TriggerOut, User, VaultSecretSummary, WorkspaceNode,
+  RunListItem, RunOut, RunTraceOut, SemanticReviewOut, ToolCallOut, ToolOut, TriggerOut, User, VaultSecretSummary, WorkspaceNode,
 } from "../types";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -726,6 +726,19 @@ export function useAuditLog() {
 }
 
 // ── Tool call approval ─────────────────────────────────────────────────────────
+
+export function useRunTrace(slug: string, runId: string | null) {
+  return useQuery<RunTraceOut>({
+    queryKey: ["run-trace", slug, runId],
+    queryFn: () => api(`/api/brains/${slug}/runs/${runId}/trace`),
+    enabled: !!slug && !!runId,
+    refetchInterval: (query) => {
+      const data = query.state.data as RunTraceOut | undefined;
+      if (!data) return 2000;
+      return ["completed", "failed"].includes(data.run.status) ? false : 2000;
+    },
+  });
+}
 
 export function useRunToolCalls(slug: string, runId: string | null) {
   return useQuery<ToolCallOut[]>({

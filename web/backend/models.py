@@ -300,6 +300,7 @@ class Run(Base):
     review = relationship("Review", back_populates="run", uselist=False, cascade="all, delete-orphan")
     tool_calls = relationship("ToolCall", back_populates="run", cascade="all, delete-orphan")
     escalations = relationship("Escalation", back_populates="run", cascade="all, delete-orphan")
+    steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan", order_by="RunStep.step_index")
 
 
 class ToolCall(Base):
@@ -358,6 +359,23 @@ class Review(Base):
     run = relationship("Run", back_populates="review")
     user = relationship("User")
     generated_eval = relationship("GeneratedEval", back_populates="review", uselist=False, cascade="all, delete-orphan")
+
+
+# ── Run trace ─────────────────────────────────────────────────────────────────
+
+class RunStep(Base):
+    __tablename__ = "run_steps"
+
+    id = Column(String(36), primary_key=True, default=_uuid)
+    run_id = Column(String(36), ForeignKey("runs.id"), nullable=False)
+    step_index = Column(Integer, nullable=False)
+    kind = Column(String(32), nullable=False)
+    # thinking|tool_call|approval_requested|approval_granted|tool_executed|tool_failed|guardrail_blocked|final_decision
+    content = Column(Text, nullable=True)
+    metadata_json = Column(Text, default="{}")
+    occurred_at = Column(DateTime, default=datetime.utcnow)
+
+    run = relationship("Run", back_populates="steps")
 
 
 class GeneratedEval(Base):

@@ -343,6 +343,14 @@ function RunHistory({ slug, onSelect, selectedId }: { slug: string; onSelect: (i
             {r.cost_usd > 0 && (
               <span className="dim" style={{ fontSize: 11 }}>${r.cost_usd.toFixed(4)}</span>
             )}
+            <Link
+              to={`/brains/${slug}/runs/${r.id}`}
+              className="run-trace-link"
+              style={{ fontSize: 11, marginLeft: "auto" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Trace →
+            </Link>
           </div>
         </div>
       ))}

@@ -42,6 +42,21 @@ One paragraph: the concrete next step a human operator should take, in plain lan
 HIGH, MEDIUM, or LOW -- your honest assessment of whether the brain has enough information to handle this case."""
 
 
+def _add_step(db, run_id: str, counter: list, kind: str, content: str = "", metadata: Optional[dict] = None) -> None:
+    """Append a RunStep to the trace. counter is a single-element list used as a mutable int."""
+    from .models import RunStep
+    db.add(RunStep(
+        run_id=run_id,
+        step_index=counter[0],
+        kind=kind,
+        content=(content or "")[:2000],
+        metadata_json=json.dumps(metadata or {}),
+        occurred_at=datetime.utcnow(),
+    ))
+    db.flush()
+    counter[0] += 1
+
+
 def _extract_cited_rules(decision_text: str) -> list:
     rules = []
     in_section = False
@@ -70,13 +85,17 @@ def _assemble_brain(brain_id: str, db) -> str:
     return "\n\n".join(parts)
 
 
-def _run_with_tools_anthropic(client, model, system, case_text, tools, db, run, ws_id):
+def _run_with_tools_anthropic(client, model, system, case_text, tools, db, run, ws_id, step_counter=None):
     """
     Multi-turn Anthropic tool-use loop.
     Returns (decision_text, tokens_in, tokens_out, awaiting_approval).
+    step_counter is a mutable [int] shared with the caller so step indices are contiguous.
     """
     from .models import ToolCall
     from .tool_executors import execute_tool, TOOL_SCHEMAS
+
+    if step_counter is None:
+        step_counter = [0]
 
     anthropic_tools = []
     for t in tools:
@@ -107,6 +126,7 @@ def _run_with_tools_anthropic(client, model, system, case_text, tools, db, run, 
         tool_blocks = [b for b in resp.content if b.type == "tool_use"]
         if text_parts:
             final_text = "\n".join(text_parts)
+            _add_step(db, run.id, step_counter, "thinking", final_text)
 
         if resp.stop_reason == "end_turn" or not tool_blocks:
             break
@@ -121,6 +141,10 @@ def _run_with_tools_anthropic(client, model, system, case_text, tools, db, run, 
             if not tool_model:
                 tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": "Tool not found"})
                 continue
+
+            _add_step(db, run.id, step_counter, "tool_call",
+                      "{}({})".format(block.name, json.dumps(block.input)[:300]),
+                      {"tool_name": block.name, "arguments": block.input})
 
             tc = ToolCall(
                 run_id=run.id,
@@ -147,6 +171,12 @@ def _run_with_tools_anthropic(client, model, system, case_text, tools, db, run, 
                     )
                     db.add(esc)
                     db.flush()
+                    _add_step(db, run.id, step_counter, "guardrail_blocked",
+                              "Tool '{}' escalated for team review".format(tool_model.name),
+                              {"tool_name": tool_model.name, "tool_call_id": tc.id})
+                _add_step(db, run.id, step_counter, "approval_requested",
+                          "Awaiting approval for: {}".format(tool_model.name),
+                          {"tool_name": tool_model.name, "tool_call_id": tc.id})
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -159,11 +189,17 @@ def _run_with_tools_anthropic(client, model, system, case_text, tools, db, run, 
                     tc.status = "executed"
                     tc.executed_at = datetime.utcnow()
                     result_str = json.dumps(result)
+                    _add_step(db, run.id, step_counter, "tool_executed",
+                              result_str[:500],
+                              {"tool_name": tool_model.name, "tool_call_id": tc.id})
                 except Exception as exc:
                     tc.status = "failed"
                     tc.error = str(exc)
                     tc.executed_at = datetime.utcnow()
                     result_str = "Error: {}".format(exc)
+                    _add_step(db, run.id, step_counter, "tool_failed",
+                              str(exc)[:500],
+                              {"tool_name": tool_model.name, "tool_call_id": tc.id, "error": str(exc)})
                 tool_results.append({"type": "tool_result", "tool_use_id": block.id, "content": result_str})
 
         db.flush()
@@ -209,6 +245,7 @@ def execute_run(run_id: str, workspace_id: Optional[str] = None) -> None:
             system = RUN_SYSTEM_PROMPT.format(brain=brain_content)
             provider = user.llm_provider or "anthropic"
             model = PROVIDERS.get(provider, PROVIDERS["anthropic"])["default_model"]
+            step_counter = [0]
 
             # Load any tools attached to this brain
             brain_tools = [
@@ -224,7 +261,7 @@ def execute_run(run_id: str, workspace_id: Optional[str] = None) -> None:
 
                 if brain_tools:
                     decision, tokens_in, tokens_out, awaiting = _run_with_tools_anthropic(
-                        client, model, system, run.case_text, brain_tools, db, run, ws_id
+                        client, model, system, run.case_text, brain_tools, db, run, ws_id, step_counter
                     )
                     run.tokens_in = tokens_in
                     run.tokens_out = tokens_out
@@ -244,6 +281,7 @@ def execute_run(run_id: str, workspace_id: Optional[str] = None) -> None:
                     decision = resp.content[0].text
                     run.tokens_in = resp.usage.input_tokens
                     run.tokens_out = resp.usage.output_tokens
+                    _add_step(db, run.id, step_counter, "thinking", decision)
             else:
                 from .llm_client import call_llm
                 decision = call_llm(
@@ -253,7 +291,9 @@ def execute_run(run_id: str, workspace_id: Optional[str] = None) -> None:
                 )
                 run.tokens_in = 0
                 run.tokens_out = 0
+                _add_step(db, run.id, step_counter, "thinking", decision)
 
+            _add_step(db, run.id, step_counter, "final_decision", decision)
             run.decision_text = decision
             run.cited_rules = json.dumps(_extract_cited_rules(decision))
             run.model_used = model
@@ -323,12 +363,18 @@ def resume_run(run_id: str) -> None:
         sse.publish(ws_id, {"type": "run.started", "run_id": run_id})
 
         try:
+            from sqlalchemy import func as _func
+            from .models import RunStep
+            last_idx = db.query(_func.max(RunStep.step_index)).filter(RunStep.run_id == run.id).scalar()
+            step_counter = [0 if last_idx is None else last_idx + 1]
+
             tool_calls = db.query(ToolCall).filter_by(run_id=run.id).order_by(ToolCall.requested_at).all()
             outcomes = []
 
             for tc in tool_calls:
                 tool = db.query(Tool).filter_by(id=tc.tool_id).first()
                 tool_label = tool.description or tool.name if tool else "action"
+                tool_name = tool.name if tool else "unknown"
 
                 if tc.status == "approved":
                     try:
@@ -336,16 +382,32 @@ def resume_run(run_id: str) -> None:
                         tc.result = json.dumps(result)
                         tc.status = "executed"
                         tc.executed_at = datetime.utcnow()
+                        result_str = json.dumps(result)
                         outcomes.append("- {} → approved and completed (result: {})".format(
-                            tool_label, json.dumps(result)
+                            tool_label, result_str
                         ))
+                        _add_step(db, run.id, step_counter, "approval_granted",
+                                  "Approved and executed: {}".format(tool_name),
+                                  {"tool_name": tool_name, "tool_call_id": tc.id, "verdict": "approved"})
+                        _add_step(db, run.id, step_counter, "tool_executed",
+                                  result_str[:500],
+                                  {"tool_name": tool_name, "tool_call_id": tc.id})
                     except Exception as exc:
                         tc.status = "failed"
                         tc.error = str(exc)
                         tc.executed_at = datetime.utcnow()
                         outcomes.append("- {} → approved but failed: {}".format(tool_label, exc))
+                        _add_step(db, run.id, step_counter, "approval_granted",
+                                  "Approved but failed: {}".format(tool_name),
+                                  {"tool_name": tool_name, "tool_call_id": tc.id, "verdict": "approved"})
+                        _add_step(db, run.id, step_counter, "tool_failed",
+                                  str(exc)[:500],
+                                  {"tool_name": tool_name, "tool_call_id": tc.id, "error": str(exc)})
                 elif tc.status == "denied":
                     outcomes.append("- {} → denied by the reviewer, not executed".format(tool_label))
+                    _add_step(db, run.id, step_counter, "approval_granted",
+                              "Denied: {}".format(tool_name),
+                              {"tool_name": tool_name, "tool_call_id": tc.id, "verdict": "denied"})
 
             db.flush()
 
@@ -386,6 +448,7 @@ def resume_run(run_id: str) -> None:
                     max_tokens=2048,
                 )
 
+            _add_step(db, run.id, step_counter, "final_decision", decision)
             run.decision_text = decision
             run.cited_rules = json.dumps(_extract_cited_rules(decision))
             run.model_used = model

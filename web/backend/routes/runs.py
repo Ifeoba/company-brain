@@ -216,6 +216,42 @@ def retry_run(
     return {"run_id": run.id, "status": "queued"}
 
 
+@router.get("/api/brains/{slug}/runs/{run_id}/trace")
+def get_run_trace(
+    slug: str,
+    run_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    from ..models import RunStep
+    brain = _get_brain(db, slug, user)
+    run = db.query(Run).filter_by(id=run_id, brain_id=brain.id, user_id=user.id).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    steps = (
+        db.query(RunStep)
+        .filter_by(run_id=run.id)
+        .order_by(RunStep.step_index)
+        .all()
+    )
+    step_list = []
+    for s in steps:
+        meta = {}
+        try:
+            meta = json.loads(s.metadata_json or "{}")
+        except Exception:
+            pass
+        step_list.append({
+            "id": s.id,
+            "step_index": s.step_index,
+            "kind": s.kind,
+            "content": s.content,
+            "metadata": meta,
+            "occurred_at": s.occurred_at.isoformat() if s.occurred_at else None,
+        })
+    return {"run": _run_to_out(run), "steps": step_list}
+
+
 @router.get("/api/brains/{slug}/runs/{run_id}")
 def get_run(
     slug: str,

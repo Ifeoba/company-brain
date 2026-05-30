@@ -5,6 +5,7 @@ import BrainsList from "./pages/BrainsList";
 import ExpertAnswer from "./pages/ExpertAnswer";
 import Login from "./pages/Login";
 import RunPage from "./pages/RunPage";
+import RunTrace from "./pages/RunTrace";
 import Settings from "./pages/Settings";
 import UpdatePage from "./pages/UpdatePage";
 import WorkspaceMap from "./pages/WorkspaceMap";
@@ -59,6 +60,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <RunPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/brains/:slug/runs/:run_id"
+            element={
+              <RequireAuth>
+                <RunTrace />
               </RequireAuth>
             }
           />
