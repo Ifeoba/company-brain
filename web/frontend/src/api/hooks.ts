@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob } from "./client";
 import type {
-  BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
-  BuiltinTool, Collaborator, ExpertQuestion, FileContent, FileSummary, InterviewState,
+  AuditLogEntry, BrainDetail, BrainRelationship, BrainSummary, BrainUpdate, BrainUpdateLink,
+  BuiltinTool, Collaborator, EscalationOut, ExpertQuestion, FileContent, FileSummary, InterviewState,
   ProviderInfo, PublicBrainUpdate, PublicQuestion, ReadinessOut, RelationshipSuggestion,
   RunListItem, RunOut, SemanticReviewOut, ToolCallOut, ToolOut, TriggerOut, User, VaultSecretSummary, WorkspaceNode,
 } from "../types";
@@ -627,6 +627,41 @@ export function useDeleteSecret() {
     mutationFn: (name: string) =>
       api(`/api/workspace/vault/${encodeURIComponent(name)}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["vault-secrets"] }),
+  });
+}
+
+// ── Escalations ───────────────────────────────────────────────────────────────
+
+export function useEscalations() {
+  return useQuery<EscalationOut[]>({
+    queryKey: ["escalations"],
+    queryFn: () => api("/api/workspace/escalations"),
+    refetchInterval: 30000,
+  });
+}
+
+export function useResolveEscalation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ escId, verdict, resolution }: { escId: string; verdict: "approved" | "denied"; resolution?: string }) =>
+      api(`/api/workspace/escalations/${escId}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ verdict, resolution: resolution ?? "" }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["escalations"] });
+      qc.invalidateQueries({ queryKey: ["runs"] });
+      qc.invalidateQueries({ queryKey: ["run"] });
+    },
+  });
+}
+
+// ── Audit log ─────────────────────────────────────────────────────────────────
+
+export function useAuditLog() {
+  return useQuery<AuditLogEntry[]>({
+    queryKey: ["audit-log"],
+    queryFn: () => api("/api/workspace/audit-log"),
   });
 }
 

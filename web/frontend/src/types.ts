@@ -242,6 +242,42 @@ export interface VaultSecretSummary {
   updated_at: string;
 }
 
+// ── Escalations ───────────────────────────────────────────────────────────────
+
+export interface EscalationToolCall {
+  id: string;
+  tool_name: string;
+  arguments: Record<string, unknown>;
+  status: string;
+}
+
+export interface EscalationOut {
+  id: string;
+  status: "pending" | "resolved";
+  reason: string;
+  guardrail_cited: string | null;
+  resolution: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  run_id: string;
+  run_case_snippet: string;
+  brain_slug: string;
+  brain_name: string;
+  tool_call: EscalationToolCall | null;
+}
+
+// ── Audit log ─────────────────────────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  resource_type: string;
+  resource_id: string | null;
+  details: Record<string, unknown>;
+  occurred_at: string;
+  actor_id: string | null;
+}
+
 // ── Tool calls (approval flow) ─────────────────────────────────────────────────
 
 export interface ToolCallOut {

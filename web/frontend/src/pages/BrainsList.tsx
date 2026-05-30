@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useBrains, useCreateBrain, useDeleteBrain } from "../api/hooks";
+import { useBrains, useCreateBrain, useDeleteBrain, useEscalations } from "../api/hooks";
 import AppTopbar from "../components/Layout";
 import Icon from "../components/Icon";
+import EscalationsModal from "../components/EscalationsModal";
+import AuditLogModal from "../components/AuditLogModal";
 import type { BrainSummary } from "../types";
 
 function NewBrainModal({ onClose }: { onClose: () => void }) {
@@ -109,9 +111,14 @@ function statusInfo(status: BrainSummary["status"]): { cls: string; label: strin
 
 export default function BrainsList() {
   const { data: brains = [], isLoading } = useBrains();
+  const { data: escalations = [] } = useEscalations();
   const [showNew, setShowNew] = useState(false);
   const [deletingBrain, setDeletingBrain] = useState<BrainSummary | null>(null);
+  const [showEscalations, setShowEscalations] = useState(false);
+  const [showAuditLog, setShowAuditLog] = useState(false);
   const navigate = useNavigate();
+
+  const pendingEscalations = escalations.filter((e) => e.status === "pending").length;
 
   return (
     <div className="bl-shell">
@@ -125,6 +132,9 @@ export default function BrainsList() {
                 {isLoading ? "Loading…" : `${brains.length} brain${brains.length !== 1 ? "s" : ""}`}
               </div>
             </div>
+            <button className="btn btn-ghost btn-lg" onClick={() => setShowAuditLog(true)}>
+              Activity log
+            </button>
             <Link to="/map" className="btn btn-ghost btn-lg">
               Map view
             </Link>
@@ -132,6 +142,15 @@ export default function BrainsList() {
               <Icon name="plus" size={12} /> New brain
             </button>
           </div>
+
+          {pendingEscalations > 0 && (
+            <div className="escalation-banner" onClick={() => setShowEscalations(true)}>
+              <span>
+                <strong>{pendingEscalations}</strong> action{pendingEscalations !== 1 ? "s" : ""} waiting for your review
+              </span>
+              <button className="btn btn-sm">Review now</button>
+            </div>
+          )}
 
           {!isLoading && brains.length === 0 ? (
             <div className="bl-empty">
@@ -210,6 +229,8 @@ export default function BrainsList() {
       {deletingBrain && (
         <DeleteBrainModal brain={deletingBrain} onClose={() => setDeletingBrain(null)} />
       )}
+      {showEscalations && <EscalationsModal onClose={() => setShowEscalations(false)} />}
+      {showAuditLog && <AuditLogModal onClose={() => setShowAuditLog(false)} />}
     </div>
   );
 }

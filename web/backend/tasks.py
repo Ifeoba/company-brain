@@ -132,8 +132,21 @@ def _run_with_tools_anthropic(client, model, system, case_text, tools, db, run, 
             db.add(tc)
             db.flush()
 
-            if tool_model.risk == "confirm":
+            if tool_model.risk in ("confirm", "escalate"):
                 needs_approval = True
+                if tool_model.risk == "escalate":
+                    from .models import Escalation
+                    esc = Escalation(
+                        run_id=run.id,
+                        workspace_id=run.workspace_id or ws_id,
+                        reason="Tool '{}' requires team review before execution".format(tool_model.name),
+                        guardrail_cited="escalate-risk tool",
+                        tool_call_id=tc.id,
+                        status="pending",
+                        created_at=datetime.utcnow(),
+                    )
+                    db.add(esc)
+                    db.flush()
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
