@@ -68,7 +68,7 @@ TOOL_SCHEMAS: dict[str, dict] = {
 BUILTIN_CATALOG = [
     {
         "name": "send_slack_message",
-        "description": "Post a message to a Slack channel. Store your bot token (xoxb-…) or incoming webhook URL as SLACK_BOT_TOKEN in the Vault.",
+        "description": "Send a Slack message to any channel. Save your Slack bot token or webhook URL as SLACK_BOT_TOKEN under Credentials first.",
         "category": "messaging",
         "risk": "confirm",
         "config_template": {
@@ -78,7 +78,7 @@ BUILTIN_CATALOG = [
     },
     {
         "name": "send_email",
-        "description": "Send an email via Resend. Requires RESEND_API_KEY in env or the Vault.",
+        "description": "Send an email to anyone. Works out of the box if you've connected Resend.",
         "category": "email",
         "risk": "confirm",
         "config_template": {
@@ -88,7 +88,7 @@ BUILTIN_CATALOG = [
     },
     {
         "name": "http_get",
-        "description": "Make an HTTP GET to any URL. Optionally attach a Bearer token stored in the Vault.",
+        "description": "Fetch data from any URL — useful for looking things up before making a decision.",
         "category": "http",
         "risk": "safe",
         "config_template": {

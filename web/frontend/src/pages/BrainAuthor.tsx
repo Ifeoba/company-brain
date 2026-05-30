@@ -124,10 +124,10 @@ export default function BrainAuthor() {
             Triggers
           </button>
           <button className="btn btn-sm" onClick={() => setShowTools(true)}>
-            Tools
+            Actions
           </button>
           <button className="btn btn-sm" onClick={() => setShowVault(true)}>
-            Vault
+            Credentials
           </button>
           <Link to={`/brains/${slug}/run`} className="btn btn-sm btn-primary">
             <Icon name="spark" size={11} /> Run

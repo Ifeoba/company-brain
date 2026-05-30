@@ -19,18 +19,18 @@ function relativeTime(iso: string | null): string {
 }
 
 const KIND_OPTIONS = [
-  { value: "webhook", label: "Webhook" },
-  { value: "schedule", label: "Schedule" },
-  { value: "email", label: "Email" },
+  { value: "webhook", label: "From another app" },
+  { value: "schedule", label: "On a schedule" },
+  { value: "email",   label: "Via email" },
 ] as const;
 
 type TriggerKind = "webhook" | "schedule" | "email";
 
 const CRON_EXAMPLES = [
-  { label: "Every hour", expr: "0 * * * *" },
-  { label: "Daily 9 AM", expr: "0 9 * * *" },
-  { label: "Every 15 min", expr: "*/15 * * * *" },
-  { label: "Weekdays 8 AM", expr: "0 8 * * 1-5" },
+  { label: "Every hour",     expr: "0 * * * *" },
+  { label: "Daily at 9 AM",  expr: "0 9 * * *" },
+  { label: "Every 15 min",   expr: "*/15 * * * *" },
+  { label: "Weekdays 8 AM",  expr: "0 8 * * 1-5" },
 ];
 
 export default function TriggersModal({ slug, onClose }: Props) {
@@ -47,7 +47,7 @@ export default function TriggersModal({ slug, onClose }: Props) {
 
   function validateCron(expr: string): boolean {
     if (expr.trim().split(/\s+/).length !== 5) {
-      setError("Cron must have 5 fields: minute hour day month weekday");
+      setError("Pick one of the schedule options above, or enter a valid schedule (5 fields).");
       return false;
     }
     setError("");
@@ -69,18 +69,16 @@ export default function TriggersModal({ slug, onClose }: Props) {
       setName("");
       setCronExpr("");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to create trigger");
+      setError(err instanceof Error ? err.message : "Something went wrong — please try again.");
     }
   }
-
-  const kindLabel = KIND_OPTIONS.find((k) => k.value === kind)?.label ?? kind;
 
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal-card triggers-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Triggers</h2>
+        <h2>When should this run?</h2>
         <div className="modal-sub">
-          Automatically run this brain when external events arrive.
+          Set up what kicks this brain off — a message from another app, a regular schedule, or an incoming email.
         </div>
 
         {/* Existing triggers */}
@@ -88,11 +86,10 @@ export default function TriggersModal({ slug, onClose }: Props) {
           <p className="dim" style={{ fontSize: 13 }}>Loading…</p>
         ) : triggers.length > 0 && (
           <div className="modal-row">
-            <span className="label">Active triggers</span>
+            <span className="label">Active</span>
             <div className="trigger-list">
               {triggers.map((t: TriggerOut) => (
                 <div key={t.id} className="trigger-row">
-                  <span className="trigger-kind-pill">{t.kind}</span>
                   <div className="trigger-row-info">
                     <span className="trigger-row-name">{t.name}</span>
                     {t.cron_expression && (
@@ -101,9 +98,9 @@ export default function TriggersModal({ slug, onClose }: Props) {
                     {t.inbound_email && (
                       <code className="trigger-row-meta">{t.inbound_email}</code>
                     )}
-                    <span className="trigger-row-meta">fired {relativeTime(t.last_fired_at)}</span>
+                    <span className="trigger-row-meta">last ran {relativeTime(t.last_fired_at)}</span>
                   </div>
-                  <label className="trigger-toggle" title={t.is_active ? "Disable" : "Enable"}>
+                  <label className="trigger-toggle" title={t.is_active ? "Pause this" : "Resume this"}>
                     <input
                       type="checkbox"
                       checked={t.is_active}
@@ -114,7 +111,7 @@ export default function TriggersModal({ slug, onClose }: Props) {
                   <button
                     className="btn btn-ghost btn-danger"
                     onClick={() => {
-                      if (confirm(`Delete trigger "${t.name}"?`)) deleteTrigger.mutate(t.id);
+                      if (confirm(`Remove "${t.name}"?`)) deleteTrigger.mutate(t.id);
                     }}
                   >
                     ✕
@@ -129,34 +126,31 @@ export default function TriggersModal({ slug, onClose }: Props) {
         {newTrigger && (
           <div className="trigger-reveal">
             <span className="label">
-              {newTrigger.kind === "webhook" && "Save these now — secret shown once"}
-              {newTrigger.kind === "email" && "Email trigger ready"}
-              {newTrigger.kind === "schedule" && "Schedule trigger created"}
+              {newTrigger.kind === "webhook"  && "You're all set — save this info now"}
+              {newTrigger.kind === "email"    && "Your email address is ready"}
+              {newTrigger.kind === "schedule" && "Schedule saved"}
             </span>
 
             {newTrigger.kind === "webhook" && (
               <>
-                <TriggerCopyRow label="Webhook URL" value={`${window.location.origin}${newTrigger.webhook_url}`} />
+                <TriggerCopyRow label="URL to send data to" value={`${window.location.origin}${newTrigger.webhook_url}`} />
                 {newTrigger.secret && (
-                  <TriggerCopyRow label="Signing secret (X-Signature: sha256=…)" value={newTrigger.secret} />
+                  <TriggerCopyRow label="Signing secret" value={newTrigger.secret} />
                 )}
-                <p className="trigger-warn">⚠ The secret won't be shown again. Delete and recreate if lost.</p>
+                <p className="trigger-warn">⚠ Copy the signing secret now — you won't be able to see it again.</p>
               </>
             )}
 
             {newTrigger.kind === "email" && newTrigger.inbound_email && (
               <>
-                <TriggerCopyRow label="Inbound email address" value={newTrigger.inbound_email} />
-                <TriggerCopyRow
-                  label="Resend / Postmark webhook URL"
-                  value={`${window.location.origin}/api/inbound-email/${newTrigger.id}`}
-                />
+                <TriggerCopyRow label="Send emails to this address" value={newTrigger.inbound_email} />
+                <TriggerCopyRow label="Or forward them to this URL" value={`${window.location.origin}/api/inbound-email/${newTrigger.id}`} />
               </>
             )}
 
             {newTrigger.kind === "schedule" && newTrigger.cron_expression && (
               <p style={{ fontSize: 13, margin: "6px 0 0" }}>
-                Will fire on: <code>{newTrigger.cron_expression}</code>
+                This will run on schedule: <code>{newTrigger.cron_expression}</code>
               </p>
             )}
 
@@ -170,7 +164,7 @@ export default function TriggersModal({ slug, onClose }: Props) {
         {!newTrigger && (
           <form onSubmit={handleCreate}>
             <div className="modal-row">
-              <span className="label">Type</span>
+              <span className="label">How should it be triggered?</span>
               <div className="trigger-kind-tabs">
                 {KIND_OPTIONS.map((k) => (
                   <button
@@ -186,13 +180,13 @@ export default function TriggersModal({ slug, onClose }: Props) {
             </div>
 
             <div className="modal-row">
-              <span className="label">Name</span>
+              <span className="label">Give it a name</span>
               <input
                 className="input"
                 placeholder={
-                  kind === "webhook" ? "e.g. Stripe events" :
-                  kind === "schedule" ? "e.g. Daily review" :
-                  "e.g. Support inbox"
+                  kind === "webhook"  ? "e.g. New Stripe payment" :
+                  kind === "schedule" ? "e.g. Morning briefing" :
+                  "e.g. Customer support emails"
                 }
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -202,34 +196,33 @@ export default function TriggersModal({ slug, onClose }: Props) {
 
             {kind === "schedule" && (
               <div className="modal-row">
-                <span className="label">Cron expression</span>
-                <input
-                  className={"input" + (error && error.includes("Cron") ? " input-error" : "")}
-                  placeholder="0 9 * * *"
-                  value={cronExpr}
-                  onChange={(e) => { setCronExpr(e.target.value); if (error) setError(""); }}
-                  style={{ fontFamily: "var(--font-mono)" }}
-                />
-                <div className="hint" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                <span className="label">How often?</span>
+                <div className="hint" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
                   {CRON_EXAMPLES.map((ex) => (
                     <button
                       key={ex.expr}
                       type="button"
-                      className="btn btn-sm"
-                      onClick={() => setCronExpr(ex.expr)}
+                      className={"btn btn-sm" + (cronExpr === ex.expr ? " btn-primary" : "")}
+                      onClick={() => { setCronExpr(ex.expr); setError(""); }}
                     >
                       {ex.label}
                     </button>
                   ))}
                 </div>
+                <input
+                  className={"input" + (error ? " input-error" : "")}
+                  placeholder="or type a custom schedule…"
+                  value={cronExpr}
+                  onChange={(e) => { setCronExpr(e.target.value); if (error) setError(""); }}
+                  style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}
+                />
               </div>
             )}
 
             {kind === "email" && (
               <div className="modal-row">
                 <p className="hint">
-                  An inbound email address will be generated. Configure Resend or Postmark
-                  inbound routing to forward emails there — each email becomes a run.
+                  You'll get a unique email address. Forward messages there from your helpdesk or inbox, and each one will start a new run.
                 </p>
               </div>
             )}
@@ -243,7 +236,7 @@ export default function TriggersModal({ slug, onClose }: Props) {
                 className="btn btn-primary"
                 disabled={!name.trim() || (kind === "schedule" && !cronExpr.trim()) || createTrigger.isPending}
               >
-                {createTrigger.isPending ? "Creating…" : `Create ${kindLabel} trigger`}
+                {createTrigger.isPending ? "Saving…" : "Save"}
               </button>
             </div>
           </form>

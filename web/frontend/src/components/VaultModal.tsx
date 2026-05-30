@@ -38,26 +38,25 @@ export default function VaultModal({ onClose }: Props) {
       setName("");
       setValue("");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to store secret");
+      setError(err instanceof Error ? err.message : "Something went wrong — please try again.");
     }
   }
 
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal-card" style={{ width: 480 }} onClick={(e) => e.stopPropagation()}>
-        <h2>Vault</h2>
+        <h2>Credentials</h2>
         <div className="modal-sub">
-          Encrypted workspace secrets — referenced by tools via their <code style={{ fontSize: 11 }}>vault_key</code> config.
-          Values are write-only; they cannot be read back through the UI.
+          Safely store API keys and tokens here. Your actions use them behind the scenes — the values are never shown again once saved.
         </div>
 
         {/* Existing secrets */}
         <div className="modal-row">
-          <span className="label">Stored secrets</span>
+          <span className="label">Saved credentials</span>
           {isLoading ? (
             <p className="dim" style={{ fontSize: 13 }}>Loading…</p>
           ) : secrets.length === 0 ? (
-            <p className="dim" style={{ fontSize: 13 }}>No secrets stored yet.</p>
+            <p className="dim" style={{ fontSize: 13 }}>Nothing saved yet.</p>
           ) : (
             <div className="trigger-list">
               {secrets.map((s: VaultSecretSummary) => (
@@ -66,12 +65,12 @@ export default function VaultModal({ onClose }: Props) {
                     <code className="trigger-row-name" style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}>
                       {s.name}
                     </code>
-                    <span className="trigger-row-meta">updated {relativeTime(s.updated_at)}</span>
+                    <span className="trigger-row-meta">saved {relativeTime(s.updated_at)}</span>
                   </div>
                   <button
                     className="btn btn-sm btn-ghost btn-danger"
                     onClick={() => {
-                      if (confirm(`Delete secret "${s.name}"? Any tools using it will stop working.`)) {
+                      if (confirm(`Remove "${s.name}"? Any actions using it will stop working.`)) {
                         deleteSecret.mutate(s.name);
                       }
                     }}
@@ -84,28 +83,29 @@ export default function VaultModal({ onClose }: Props) {
           )}
         </div>
 
-        {/* Add / update secret */}
+        {/* Add / update */}
         <form onSubmit={handleStore}>
           <div className="modal-row">
-            <span className="label">Secret name</span>
+            <span className="label">Name</span>
             <input
               className="input"
               placeholder="e.g. SLACK_BOT_TOKEN"
               value={name}
               onChange={(e) => { setName(e.target.value.toUpperCase()); setSaved(""); }}
               style={{ fontFamily: "var(--font-mono)" }}
+              autoComplete="off"
             />
             <div className="hint" style={{ marginTop: 4, fontSize: 11.5 }}>
-              Names are upper-cased automatically. Creating a duplicate overwrites it.
+              Saving the same name again updates it.
             </div>
           </div>
 
           <div className="modal-row">
-            <span className="label">Value</span>
+            <span className="label">Key or token</span>
             <input
               className="input"
               type="password"
-              placeholder="Paste your secret here"
+              placeholder="Paste your key or token here"
               value={value}
               onChange={(e) => { setValue(e.target.value); setSaved(""); }}
               autoComplete="new-password"
@@ -114,7 +114,7 @@ export default function VaultModal({ onClose }: Props) {
 
           {saved && (
             <p style={{ fontSize: 12, color: "var(--accent)", marginBottom: 8 }}>
-              ✓ {saved} stored.
+              ✓ {saved} saved.
             </p>
           )}
           {error && <div className="error-msg">{error}</div>}
@@ -126,7 +126,7 @@ export default function VaultModal({ onClose }: Props) {
               className="btn btn-primary"
               disabled={!name.trim() || !value.trim() || storeSecret.isPending}
             >
-              {storeSecret.isPending ? "Storing…" : "Store secret"}
+              {storeSecret.isPending ? "Saving…" : "Save"}
             </button>
           </div>
         </form>

@@ -13,14 +13,14 @@ interface Props {
 }
 
 const RISK_LABEL: Record<string, string> = {
-  safe: "Auto-executes",
-  confirm: "Needs approval",
-  escalate: "Escalates",
+  safe:     "Runs automatically",
+  confirm:  "Asks you first",
+  escalate: "Flags for review",
 };
 
 const RISK_COLOR: Record<string, string> = {
-  safe: "var(--accent)",
-  confirm: "#f59e0b",
+  safe:     "var(--accent)",
+  confirm:  "#f59e0b",
   escalate: "var(--bad)",
 };
 
@@ -55,7 +55,6 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
   const [error, setError] = useState("");
 
   const attachedIds = new Set(brainTools.map((t) => t.id));
-  const availableInLibrary = wsTools.filter((t) => !attachedIds.has(t.id));
 
   async function handleCreateAndAttach(e: React.FormEvent) {
     e.preventDefault();
@@ -68,7 +67,7 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
       try {
         config = JSON.parse(customConfig);
       } catch {
-        setConfigError("Config must be valid JSON");
+        setConfigError("Check the settings — something doesn't look right.");
         return;
       }
     }
@@ -87,63 +86,64 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
       setCustomDesc("");
       setCustomConfig("");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to create tool");
+      setError(err instanceof Error ? err.message : "Something went wrong — please try again.");
     }
   }
 
   return (
     <div className="modal-scrim" onClick={onClose}>
       <div className="modal-card tools-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Tools</h2>
+        <h2>Actions</h2>
         <div className="modal-sub">
-          Tools let this brain take actions — send messages, call APIs, send emails.{" "}
+          Give this brain the ability to act — send a Slack message, fire off an email, or call an external service.{" "}
           <button
             type="button"
             className="btn-link"
             onClick={() => { onClose(); onOpenVault(); }}
           >
-            Manage Vault secrets →
+            Manage saved credentials →
           </button>
         </div>
 
         {/* Tab bar */}
         <div className="trigger-kind-tabs" style={{ marginBottom: 16 }}>
-          {([["brain", "On this brain"], ["library", "Workspace library"], ["create", "Add new"]] as const).map(
-            ([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className={"btn" + (tab === key ? " btn-primary" : "")}
-                onClick={() => { setTab(key); setError(""); }}
-              >
-                {label}
-              </button>
-            )
-          )}
+          {([
+            ["brain",   "Enabled"],
+            ["library", "Available"],
+            ["create",  "Set up new"],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={"btn" + (tab === key ? " btn-primary" : "")}
+              onClick={() => { setTab(key); setError(""); }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* Brain tools tab */}
+        {/* Enabled tab */}
         {tab === "brain" && (
           <>
             {loadingBrain ? (
               <p className="dim" style={{ fontSize: 13 }}>Loading…</p>
             ) : brainTools.length === 0 ? (
               <p className="dim" style={{ fontSize: 13 }}>
-                No tools attached. Add from the workspace library or create a new one.
+                Nothing enabled yet. Pick from what's available or set up something new.
               </p>
             ) : (
               <div className="trigger-list">
                 {brainTools.map((t: ToolOut) => (
                   <div key={t.id} className="trigger-row">
                     <div className="trigger-row-info">
-                      <span className="trigger-row-name">{t.name}</span>
-                      <span className="trigger-row-meta">{t.description}</span>
+                      <span className="trigger-row-name">{t.description || t.name}</span>
                     </div>
                     <RiskBadge risk={t.risk} />
                     <button
                       className="btn btn-sm btn-ghost btn-danger"
                       onClick={() => {
-                        if (confirm(`Remove "${t.name}" from this brain?`)) detachTool.mutate(t.id);
+                        if (confirm(`Disable "${t.description || t.name}"?`)) detachTool.mutate(t.id);
                       }}
                     >
                       ✕
@@ -155,41 +155,40 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
           </>
         )}
 
-        {/* Workspace library tab */}
+        {/* Available tab */}
         {tab === "library" && (
           <>
             {wsTools.length === 0 ? (
               <p className="dim" style={{ fontSize: 13 }}>
-                No tools in workspace yet. Go to "Add new" to create one.
+                Nothing set up yet. Go to "Set up new" to add your first action.
               </p>
             ) : (
               <div className="trigger-list">
                 {wsTools.map((t: ToolOut) => {
-                  const attached = attachedIds.has(t.id);
+                  const enabled = attachedIds.has(t.id);
                   return (
                     <div key={t.id} className="trigger-row">
                       <div className="trigger-row-info">
-                        <span className="trigger-row-name">{t.name}</span>
-                        <span className="trigger-row-meta">{t.description}</span>
+                        <span className="trigger-row-name">{t.description || t.name}</span>
                       </div>
                       <RiskBadge risk={t.risk} />
-                      {attached ? (
-                        <span className="trigger-kind-pill" style={{ color: "var(--accent)" }}>attached</span>
+                      {enabled ? (
+                        <span className="trigger-kind-pill" style={{ color: "var(--accent)" }}>on</span>
                       ) : (
                         <button
                           className="btn btn-sm btn-primary"
                           onClick={() => attachTool.mutate(t.id)}
                           disabled={attachTool.isPending}
                         >
-                          Add
+                          Enable
                         </button>
                       )}
                       <button
                         className="btn btn-sm btn-ghost btn-danger"
                         onClick={() => {
-                          if (confirm(`Delete "${t.name}" from workspace?`)) deleteTool.mutate(t.id);
+                          if (confirm(`Remove "${t.description || t.name}"?`)) deleteTool.mutate(t.id);
                         }}
-                        title="Delete from workspace"
+                        title="Remove"
                       >
                         ✕
                       </button>
@@ -201,11 +200,11 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
           </>
         )}
 
-        {/* Create tab */}
+        {/* Set up new tab */}
         {tab === "create" && (
           <form onSubmit={handleCreateAndAttach}>
             <div className="modal-row">
-              <span className="label">Choose tool type</span>
+              <span className="label">What do you want it to do?</span>
               <div className="trigger-list">
                 {builtins.map((b: BuiltinTool) => (
                   <div
@@ -219,8 +218,7 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
                     }}
                   >
                     <div className="trigger-row-info">
-                      <span className="trigger-row-name">{b.name}</span>
-                      <span className="trigger-row-meta">{b.description}</span>
+                      <span className="trigger-row-name">{b.description}</span>
                     </div>
                     <RiskBadge risk={b.risk} />
                   </div>
@@ -231,17 +229,17 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
             {selectedBuiltin && (
               <>
                 <div className="modal-row">
-                  <span className="label">Description (optional)</span>
+                  <span className="label">Short note (optional)</span>
                   <input
                     className="input"
-                    placeholder={selectedBuiltin.description}
+                    placeholder="e.g. Alerts the on-call team in #incidents"
                     value={customDesc}
                     onChange={(e) => setCustomDesc(e.target.value)}
                   />
                 </div>
 
                 <div className="modal-row">
-                  <span className="label">Config (JSON)</span>
+                  <span className="label">Settings</span>
                   <textarea
                     className={"textarea" + (configError ? " input-error" : "")}
                     value={customConfig}
@@ -250,7 +248,10 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
                   />
                   {configError && <div className="error-msg">{configError}</div>}
                   <div className="hint" style={{ marginTop: 4, fontSize: 11.5 }}>
-                    vault_key references a secret name stored in the Vault.
+                    The credential name should match what you've saved under{" "}
+                    <button type="button" className="btn-link" onClick={() => { onClose(); onOpenVault(); }}>
+                      Credentials
+                    </button>.
                   </div>
                 </div>
               </>
@@ -265,7 +266,7 @@ export default function ToolsModal({ slug, onClose, onOpenVault }: Props) {
                 className="btn btn-primary"
                 disabled={!selectedBuiltin || createTool.isPending || attachTool.isPending}
               >
-                {createTool.isPending || attachTool.isPending ? "Adding…" : "Add to brain"}
+                {createTool.isPending || attachTool.isPending ? "Enabling…" : "Enable"}
               </button>
             </div>
           </form>
