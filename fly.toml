@@ -18,7 +18,7 @@ primary_region = "lax"
 
 [processes]
   web = "uvicorn backend.app:app --host 0.0.0.0 --port 8000 --workers 1"
-  worker = "celery -A backend.celery_app worker --beat --loglevel=info -Q runs,maintainer -c 2"
+  worker = "celery -A backend.celery_app worker --beat --loglevel=info -Q runs,maintainer -c 1"
 
 [deploy]
   release_command = "alembic upgrade head"

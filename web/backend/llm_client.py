@@ -1,15 +1,18 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Optional
 
-import litellm
-
 from .crypto import decrypt_key
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
     from .models import User
 
-litellm.drop_params = True  # silently drop params unsupported by a provider
+
+def _litellm():
+    """Lazy-load litellm to avoid ~150MB import cost at server startup."""
+    import litellm as _ll
+    _ll.drop_params = True
+    return _ll
 
 PROVIDERS: dict[str, dict[str, Any]] = {
     "anthropic": {
@@ -65,7 +68,7 @@ def test_credential(api_key: str, provider: str) -> dict:
     if not info:
         return {"ok": False, "error": "Unknown provider: {}".format(provider)}
     try:
-        resp = litellm.completion(
+        resp = _litellm().completion(
             model=info["litellm_model"],
             messages=[{"role": "user", "content": "Reply with just: ok"}],
             max_tokens=5,
@@ -119,7 +122,7 @@ def call_llm(
     if tools:
         kwargs["tools"] = tools
 
-    resp = litellm.completion(**kwargs)
+    resp = _litellm().completion(**kwargs)
 
     choice = resp.choices[0]
     msg = choice.message
