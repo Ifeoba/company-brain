@@ -10,7 +10,7 @@
 #       GITHUB_REDIRECT_URI=https://<your-app-name>.fly.dev/api/auth/github/callback
 #   fly deploy
 
-app = "company-brain"
+app = "mycompany-brain-ifeoba"
 primary_region = "lax"
 
 [build]
