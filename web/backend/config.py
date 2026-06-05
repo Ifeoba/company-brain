@@ -1,4 +1,5 @@
 from pathlib import Path
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Always resolve .env relative to this file (web/backend/ → web/)
@@ -9,6 +10,14 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=str(_ENV_FILE), env_file_encoding="utf-8", extra="ignore")
 
     database_url: str = "sqlite:///./data/company-brain.db"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_db_url(cls, v: str) -> str:
+        # Fly Postgres sets postgres:// but SQLAlchemy 2 requires postgresql+psycopg://
+        if isinstance(v, str) and v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+psycopg://", 1)
+        return v
     session_secret: str = "dev-secret-change-in-production"
     fernet_key: str = ""
 
