@@ -6,3 +6,5 @@ __pycache__/
 runtime-events.jsonl
 .DS_Store
 *.egg-info/
+web/data/
+*.db

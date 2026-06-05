@@ -38,6 +38,88 @@ The spec and examples are independent of the runtime. You can clone this repo, c
 
 ---
 
+## Web app (Docker)
+
+The web app runs the full runtime — brain interviews, runs, escalations, audit log, and the maintainer service — as a Docker Compose stack.
+
+### 1. Copy and fill in the environment file
+
+```bash
+cp web/.env.example web/.env
+```
+
+Open `web/.env` and fill in every `REPLACE_ME` value:
+
+**`SESSION_SECRET`** — random 32-byte hex string used to sign session cookies:
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+**`FERNET_KEY`** — symmetric encryption key used to store API keys at rest:
+```bash
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Paste each output directly into `web/.env`. Do not leave `REPLACE_ME` — the app will fail to start with a clear error if either key is missing.
+
+### 2. Create a GitHub OAuth app
+
+Go to <https://github.com/settings/applications/new> and create a new OAuth app with:
+
+- **Homepage URL**: `http://localhost:5173`
+- **Authorization callback URL**: `http://localhost:8000/api/auth/github/callback`
+
+Copy the **Client ID** and generate a **Client Secret**, then paste them into `web/.env`:
+
+```
+GITHUB_CLIENT_ID=your_client_id
+GITHUB_CLIENT_SECRET=your_client_secret
+```
+
+### 3. Start the stack
+
+```bash
+docker-compose up --build
+```
+
+This starts Postgres, Redis, the FastAPI backend (port 8000), and the Celery worker and beat scheduler.
+
+### 4. Run database migrations
+
+In a second terminal, once the `api` container is healthy:
+
+```bash
+docker-compose exec api alembic upgrade head
+```
+
+This creates all tables. Confirm with:
+
+```bash
+docker-compose exec db psql -U cb -d companybrain -c "\dt"
+```
+
+You should see 25+ tables.
+
+### 5. Start the frontend (dev)
+
+```bash
+cd web/frontend
+npm install
+npm run dev
+```
+
+Open <http://localhost:5173> and sign in with GitHub.
+
+### Resetting the database
+
+```bash
+docker-compose down -v   # removes the pgdata volume
+docker-compose up --build
+docker-compose exec api alembic upgrade head
+```
+
+---
+
 ## Quick start
 
 ### 1. Clone and install
