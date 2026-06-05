@@ -1,0 +1,37 @@
+# Fly.io deployment config for Company Brain.
+# Before first deploy, run:
+#   fly apps create <your-app-name>
+#   fly postgres create --name company-brain-db
+#   fly postgres attach company-brain-db
+#   fly secrets set SESSION_SECRET=<32-char-hex> FERNET_KEY=<fernet-key> \
+#       GITHUB_CLIENT_ID=<id> GITHUB_CLIENT_SECRET=<secret> \
+#       REDIS_URL=<upstash-redis-url>
+#   fly secrets set FRONTEND_ORIGIN=https://<your-app-name>.fly.dev \
+#       GITHUB_REDIRECT_URI=https://<your-app-name>.fly.dev/api/auth/github/callback
+#   fly deploy
+
+app = "company-brain"
+primary_region = "lax"
+
+[build]
+  dockerfile = "web/Dockerfile"
+
+[processes]
+  web = "uvicorn backend.app:app --host 0.0.0.0 --port 8000 --workers 1"
+  worker = "celery -A backend.celery_app worker --beat --loglevel=info -Q runs,maintainer -c 2"
+
+[deploy]
+  release_command = "alembic upgrade head"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["web"]
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
